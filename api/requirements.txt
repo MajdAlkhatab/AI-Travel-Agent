@@ -7,3 +7,4 @@ google-search-results
 pydantic
 fastapi
 uvicorn
+langchain-mcp-adapters
