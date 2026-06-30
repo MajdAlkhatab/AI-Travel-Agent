@@ -228,7 +228,7 @@ graph = builder.compile()
 # --- 6. FASTAPI APPLICATION SETUP ---
 app = FastAPI()
 
-@app.get("/api/generate-trip")
+@app.get("/")
 async def generate_trip(
     departure_id: str = "CPH", 
     travelers: int = 2, 
