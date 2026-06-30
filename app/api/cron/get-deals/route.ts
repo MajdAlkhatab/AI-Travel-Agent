@@ -9,7 +9,7 @@ export async function GET() {
     }
     const blobResponse = await fetch(blobs[0].url, { cache: 'no-store' });
     if (!blobResponse.ok) return NextResponse.json([]);
-    
+
     const deals = await blobResponse.json();
     return NextResponse.json(deals);
   } catch (error) {

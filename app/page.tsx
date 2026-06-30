@@ -41,42 +41,20 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch deals from Vercel Blob via a wrapper or directly from a public endpoint
-  const fetchDeals = async () => {
-    try {
-      setLoading(true);
-      // We read the publicly saved file from our cron route location or fallback
-      // For Next.js to expose the file cleanly, we fetch the data
-      const res = await fetch('/api/cron'); // Using the cron GET logic as a fetch source for convenience
-      if (res.ok) {
-        // Alternatively, if you want a dedicated read, you can read from the blob url.
-        // Let's assume we trigger a background read
-      }
-      
-      // Fallback/Mock structure to ensure UI displays beautifully right away if blob is empty
-      const response = await fetch('https://raw.githubusercontent.com/vercel/blob/main/README.md'); // dummy placeholder check
-      
-      // Realistically, we pull the deals array. Let's create a robust fallback mechanism
-      const localRes = await fetch('/api/get-deals'); 
-      if (localRes.ok) {
-        const data = await localRes.json();
-        setDeals(data);
-      }
-    } catch (err) {
-      console.error("Failed to load deals:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Fetch saved deals from Vercel Blob on page load
   useEffect(() => {
-    // Basic dynamic data loading routine
     const loadData = async () => {
       try {
-        const res = await fetch('/api/cron'); // Trigger standard check
-        // For absolute reliability, we'll implement a clean static API read route next
-      } catch (e) {}
-      setLoading(false);
+        const res = await fetch('/api/get-deals');
+        if (res.ok) {
+          const data = await res.json();
+          setDeals(data);
+        }
+      } catch (err) {
+        console.error("Failed to load deals:", err);
+      } finally {
+        setLoading(false);
+      }
     };
     loadData();
   }, []);
@@ -85,9 +63,11 @@ export default function Home() {
     setTriggeringAgent(true);
     try {
       const res = await fetch('/api/cron');
-      if (res.ok) {
-        alert("New deal generated successfully!");
+      const data = await res.json();
+      if (data.success) {
         window.location.reload();
+      } else {
+        alert(data.message || "Agent run did not produce a new deal.");
       }
     } catch (err) {
       alert("Failed to run agents manually.");
@@ -153,7 +133,7 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* Clean Text-Based Header Placeholder for Uncluttered Look */}
+                  {/* Header */}
                   <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-32 flex items-end p-4">
                     <h2 className="text-white text-xl font-bold truncate">
                       {deal.destination}, {deal.country}
@@ -194,7 +174,7 @@ export default function Home() {
 
       {/* Expanded Detailed Itinerary Modal */}
       {selectedDeal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <div>
@@ -211,29 +191,29 @@ export default function Home() {
 
             <div className="p-6 space-y-6 text-sm text-gray-700 leading-relaxed">
               <div>
-                <h3 className="font-bold text-gray-900 text-base mb-2">✈️ Flight & 🏨 Hotel Summary</h3>
+                <h3 className="font-bold text-gray-900 text-base mb-2">Flight &amp; Hotel Summary</h3>
                 <p><strong>Airline:</strong> {selectedDeal.flight?.airline} (${selectedDeal.flight?.price})</p>
                 <p><strong>Hotel:</strong> {selectedDeal.hotel?.name} — {selectedDeal.hotel?.deal}</p>
                 <p><strong>Travel Window:</strong> {selectedDeal.start_date} to {selectedDeal.end_date}</p>
               </div>
 
               <div className="border-t border-gray-100 pt-4">
-                <h3 className="font-bold text-gray-900 text-base mb-2">🚗 Ground Transportation</h3>
+                <h3 className="font-bold text-gray-900 text-base mb-2">Ground Transportation</h3>
                 <p className="whitespace-pre-wrap text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100">{selectedDeal.transport_summary}</p>
               </div>
 
               <div className="border-t border-gray-100 pt-4">
-                <h3 className="font-bold text-gray-900 text-base mb-2">☀️ Activities & Local Culture</h3>
+                <h3 className="font-bold text-gray-900 text-base mb-2">Activities &amp; Local Culture</h3>
                 <p className="whitespace-pre-wrap text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100">{selectedDeal.activity_summary}</p>
               </div>
 
               <div className="border-t border-gray-100 pt-4">
-                <h3 className="font-bold text-gray-900 text-base mb-2">💱 Currency Exchange info</h3>
+                <h3 className="font-bold text-gray-900 text-base mb-2">Currency Exchange Info</h3>
                 <p className="whitespace-pre-wrap text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100">{selectedDeal.currency_summary}</p>
               </div>
 
               <div className="border-t border-indigo-100 bg-indigo-50/50 p-4 rounded-xl">
-                <h3 className="font-bold text-indigo-950 text-base mb-2">📋 Final Tailored Itinerary</h3>
+                <h3 className="font-bold text-indigo-950 text-base mb-2">Final Tailored Itinerary</h3>
                 <p className="whitespace-pre-wrap text-indigo-900 font-medium">{selectedDeal.final_itinerary}</p>
               </div>
             </div>
