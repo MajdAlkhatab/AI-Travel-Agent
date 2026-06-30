@@ -4,5 +4,10 @@
       "path": "/api/cron",
       "schedule": "0 9,12,15,18 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/generate-trip.py": {
+      "maxDuration": 300
+    }
+  }
 }
