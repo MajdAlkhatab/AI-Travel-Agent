@@ -3,7 +3,7 @@ langchain-openai
 langchain
 langgraph
 tavily-python
-google-search-results
+serpapi
 pydantic
 fastapi
 uvicorn
