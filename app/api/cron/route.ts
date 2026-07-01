@@ -3,10 +3,34 @@ import { put, list } from '@vercel/blob';
 
 export async function GET(request: Request) {
   try {
-    // 1. Call your Python AI Agents
+    // 1. Fetch existing deals FIRST, so we know which countries to avoid
+    // repeating before calling the Python agents.
+    let existingDeals: any[] = [];
+    const { blobs } = await list({ prefix: 'deals.json' });
+
+    if (blobs.length > 0) {
+      const blobResponse = await fetch(blobs[0].url, { cache: 'no-store' });
+      if (blobResponse.ok) {
+        existingDeals = await blobResponse.json();
+      }
+    }
+
+    // Countries from the last 7 saved trips, deduped, comma-joined.
+    const recentCountries = Array.from(
+      new Set(
+        existingDeals
+          .slice(0, 7)
+          .map((d) => d?.country)
+          .filter((c): c is string => Boolean(c))
+      )
+    );
+
+    // 2. Call your Python AI Agents, passing the exclusion list along
     const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
     const host = request.headers.get('host');
-    const pythonApiUrl = `${protocol}://${host}/api/generate-trip`;
+    const pythonApiUrl = `${protocol}://${host}/api/generate-trip?exclude_destinations=${encodeURIComponent(
+      recentCountries.join(',')
+    )}`;
 
     console.log("Triggering Python Agents at:", pythonApiUrl);
     const agentResponse = await fetch(pythonApiUrl, { cache: 'no-store' });
@@ -18,7 +42,7 @@ export async function GET(request: Request) {
 
     const newDeal = await agentResponse.json();
 
-    // 2. Bronze: persist the untouched raw SerpApi responses for this run,
+    // 3. Bronze: persist the untouched raw SerpApi responses for this run,
     // one file per run, timestamped so nothing is ever overwritten. Saved
     // even if no flight deal was found, so failed runs are debuggable too.
     const bronzeTimestamp = newDeal?.created_at || new Date().toISOString();
@@ -37,24 +61,13 @@ export async function GET(request: Request) {
       console.error("Bronze save failed:", bronzeError);
     }
 
-    // 3. Guard: if no flight was found, don't save a broken card
+    // 4. Guard: if no flight was found, don't save a broken card
     if (!newDeal || !newDeal.destination) {
       console.warn("No valid deal found this run. Skipping save.");
       return NextResponse.json({
         success: false,
         message: "No flight deal found this run. Nothing saved."
       });
-    }
-
-    // 4. Fetch existing deals from Vercel Blob
-    let existingDeals: any[] = [];
-    const { blobs } = await list({ prefix: 'deals.json' });
-
-    if (blobs.length > 0) {
-      const blobResponse = await fetch(blobs[0].url, { cache: 'no-store' });
-      if (blobResponse.ok) {
-        existingDeals = await blobResponse.json();
-      }
     }
 
     // 5. Strip the bulky raw fields before storing the UI-facing deal —
