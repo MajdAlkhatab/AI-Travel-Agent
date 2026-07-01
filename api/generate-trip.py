@@ -1,4 +1,3 @@
-
 import os
 import asyncio
 import json
@@ -46,7 +45,13 @@ class TravelPlanState(TypedDict):
     start_date: str
     end_date: str
     hotel_area: str
-    
+
+    # Full, untouched SerpApi responses — kept alongside the curated fields
+    # above so the raw payload (images, thumbnails, etc.) is preserved for
+    # future frontend use without changing anything else downstream.
+    raw_flight_response: dict
+    raw_hotel_response: dict
+
     transport_summary: str
     activity_summary: str
     currency_summary: str
@@ -72,7 +77,9 @@ def get_flight_deals(departure_id, outbound_date_range, travel_duration="1", cur
     result = serp_client.search(params)
     if result.get("error"):
         raise RuntimeError(f"google_flights_deals failed: {result['error']}")
-    return result.get("deals", [])
+    # Return the full raw response instead of just the "deals" list, so the
+    # caller can both extract deals AND keep the untouched payload.
+    return result
 
 def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, currency="USD", gl="us", hl="en"):
     params = {
@@ -88,7 +95,9 @@ def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, curren
     result = serp_client.search(params)
     if result.get("error"):
         raise RuntimeError(f"google_hotels failed: {result['error']}")
-    return result.get("properties", [])
+    # Return the full raw response instead of just "properties", same reason
+    # as get_flight_deals above.
+    return result
 
 def get_best_hotel_area(city, country):
     prompt = f"What is the single most popular tourist destination/area for hotels in or near {city}, {country}? Reply with just the destination name."
@@ -129,19 +138,23 @@ async def get_frankfurter_executor():
 # --- 4. LANGGRAPH NODES ---
 async def node_trip_deals(state: TravelPlanState):
     dates = flexible_date_range(60)
-    flights = get_flight_deals(state["departure_id"], dates, travel_duration=state["duration"])
-    
+    raw_flight_response = get_flight_deals(state["departure_id"], dates, travel_duration=state["duration"])
+    flights = raw_flight_response.get("deals", [])
+
     deals_by_discount = sorted(flights, key=lambda d: d.get("discount_percentage", 0), reverse=True)
     best_flight = next((f for f in deals_by_discount if f.get("outbound_date") and f.get("return_date")), None)
-    
+
     if not best_flight:
-        return {"destination": None} 
-        
+        # Keep the raw flight response even on a "no deal found" run — useful
+        # for debugging why nothing matched.
+        return {"destination": None, "raw_flight_response": raw_flight_response}
+
     city, country = best_flight["name"], best_flight["country"]
     check_in, check_out = best_flight["outbound_date"], best_flight["return_date"]
     
     hotel_area = get_best_hotel_area(city, country)
-    hotels = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
+    raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
+    hotels = raw_hotel_response.get("properties", [])
     best_hotel = max(hotels, key=hotel_discount_percent) if hotels else None
     
     return {
@@ -151,7 +164,9 @@ async def node_trip_deals(state: TravelPlanState):
         "country": country,
         "start_date": check_in,
         "end_date": check_out,
-        "hotel_area": hotel_area
+        "hotel_area": hotel_area,
+        "raw_flight_response": raw_flight_response,
+        "raw_hotel_response": raw_hotel_response,
     }
 
 async def node_transport(state: TravelPlanState):
