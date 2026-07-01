@@ -327,7 +327,6 @@ function Beacon({ icon: Icon, label, status }: { icon: any; label: string; statu
           )}
         </div>
       </div>
-      {/* Label positioned absolutely so it doesn't affect the flex alignment axis */}
       <span
         className={
           'absolute top-full mt-2 text-[11px] font-semibold tracking-wide whitespace-nowrap transition-colors duration-500 ' +
@@ -468,8 +467,6 @@ function PipelineStrip({
           </div>
         </div>
 
-        {/* Use items-center to perfectly center the nodes and connectors. 
-            pb-8 accommodates the absolutely positioned text beneath the beacons */}
         <div className="flex items-center overflow-x-auto pb-8 pt-4 hide-scrollbar">
           <Beacon icon={Radar} label="Received" status={statusOf('received', phase)} />
           <HConnector active={statusOf('flight', phase) !== 'pending'} />
@@ -564,7 +561,6 @@ export default function Home() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [subDone, setSubDone] = useState({ transport: false, activities: false, currency: false });
   const runIdRef = useRef(0);
-  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 10000);
@@ -595,32 +591,19 @@ export default function Home() {
     loadData();
   }, []);
 
-  const clearAllTimeouts = () => {
-    timeoutsRef.current.forEach(clearTimeout);
-    timeoutsRef.current = [];
-  };
-
   const triggerManualRun = async (params: typeof triggerParams) => {
     const runId = ++runIdRef.current;
     
-    // Reset state
-    clearAllTimeouts();
+    // Reset pipeline state
     setPipelineDeal(null);
     setPipelineError(null);
     setElapsedSec(0);
     setSubDone({ transport: false, activities: false, currency: false });
+    
+    // Visually start the pipeline
     setPipelinePhase('received');
-
-    // Setup visual timeline reflecting a ~2.5 to 3 min wait (150-180 seconds)
-    timeoutsRef.current.push(
-      setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('flight'); }, 10000), // 10s
-      setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('hotel'); }, 45000), // 45s
-      setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('parallel'); }, 85000), // 1m 25s
-      setTimeout(() => { if (runIdRef.current === runId) setSubDone(s => ({ ...s, transport: true })); }, 105000), // 1m 45s
-      setTimeout(() => { if (runIdRef.current === runId) setSubDone(s => ({ ...s, activities: true })); }, 125000), // 2m 05s
-      setTimeout(() => { if (runIdRef.current === runId) setSubDone(s => ({ ...s, currency: true })); }, 145000), // 2m 25s
-      setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('synthesize'); }, 155000) // 2m 35s
-    );
+    // Start "flight" instantly to show user activity since trip_deals combines both flight & hotel
+    setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('flight'); }, 800);
 
     try {
       const query = `?${new URLSearchParams({
@@ -630,37 +613,68 @@ export default function Home() {
         home_currency: params.homeCurrency,
       }).toString()}`;
       
-      const res = await fetch(`/api/cron${query}`);
-      const data = await res.json();
+      const response = await fetch(`/api/generate-trip${query}`);
       
-      if (runIdRef.current !== runId) return;
+      if (!response.body) throw new Error("No readable stream available");
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let partialData = '';
 
-      // Finish immediately regardless of current timer progress
-      clearAllTimeouts();
-      
-      if (data.success && data.deal) {
-        setPipelinePhase('synthesize');
-        setTimeout(() => {
-          if (runIdRef.current !== runId) return;
-          setPipelineDeal(data.deal);
-          setPipelinePhase('done');
-          setDeals((prev) => [data.deal, ...prev].slice(0, 9));
-        }, 1500); // Small final synthetic delay to show "done" state transition
-      } else {
-        setPipelineError(data.message || null);
-        setPipelinePhase('empty');
+      // Stream Event Loop
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        partialData += decoder.decode(value, { stream: true });
+        const lines = partialData.split('\n\n');
+        partialData = lines.pop() || ''; // Keep the incomplete chunk for next pass
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const payload = JSON.parse(line.substring(6));
+            
+            if (runIdRef.current !== runId) return; // Ignore if user closed/restarted
+
+            if (payload.type === 'status') {
+              if (payload.node === 'trip_deals') {
+                // Trip deals encompasses flight and hotel, so when it finishes jump straight to parallel
+                setPipelinePhase('parallel');
+              } else if (payload.node === 'transport') {
+                setSubDone(s => ({ ...s, transport: true }));
+              } else if (payload.node === 'activities') {
+                setSubDone(s => ({ ...s, activities: true }));
+              } else if (payload.node === 'currency') {
+                setSubDone(s => ({ ...s, currency: true }));
+              } else if (payload.node === 'synthesize') {
+                setPipelinePhase('synthesize');
+              }
+            } else if (payload.type === 'empty') {
+              setPipelinePhase('empty');
+            } else if (payload.type === 'complete') {
+              setPipelinePhase('synthesize');
+              setTimeout(() => {
+                if (runIdRef.current !== runId) return;
+                setPipelineDeal(payload.data);
+                setPipelinePhase('done');
+                setDeals(prev => [payload.data, ...prev].slice(0, 9));
+              }, 1000); // 1-second delay so user registers 'synthesize' phase just finished
+            } else if (payload.type === 'error') {
+              setPipelineError(payload.message || 'Error occurred');
+              setPipelinePhase('error');
+            }
+          }
+        }
       }
     } catch (err) {
       if (runIdRef.current !== runId) return;
-      clearAllTimeouts();
       setPipelineError('Could not reach the agents. Check your connection and try again.');
       setPipelinePhase('error');
     }
   };
 
   const closePipeline = () => {
-    runIdRef.current++;
-    clearAllTimeouts();
+    runIdRef.current++; // Invalidates the active stream so it stops updating state
     setPipelinePhase('idle');
   };
 

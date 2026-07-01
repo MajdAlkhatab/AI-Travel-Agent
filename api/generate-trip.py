@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from tavily import TavilyClient
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
@@ -83,6 +84,7 @@ def get_flight_deals(departure_id, outbound_date_range, travel_duration="1", cur
         "currency": currency,
         "gl": gl, "hl": hl,
     }
+
     print(f"[flight-search] request departure_id={departure_id} outbound_date={outbound_date_range} travel_duration={travel_duration} currency={currency}")
 
     start = time.monotonic()
@@ -121,6 +123,7 @@ def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, curren
         "gl": gl, "hl": hl,
         "special_offers": "true",
     }
+
     print(f"[hotel-search] request q='{destination} hotels' check_in={check_in_date} check_out={check_out_date} adults={adults}")
 
     start = time.monotonic()
@@ -156,10 +159,6 @@ def hotel_discount_percent(hotel):
     return int(match.group(1)) if match else 0
 
 def pick_best_flight(flights, exclude, departure_id=None):
-    """Sort by discount and return the first deal with valid dates whose
-    country isn't in the excluded set. Logs a breakdown of why deals were
-    dropped (missing dates vs. excluded country) so filtering behavior is
-    visible, not just the final outcome."""
     total = len(flights)
     missing_dates = [f for f in flights if not (f.get("outbound_date") and f.get("return_date"))]
     valid_dated = [f for f in flights if f.get("outbound_date") and f.get("return_date")]
@@ -191,17 +190,23 @@ def web_search(query: str) -> str:
     return str(tavily.search(query))
 
 # EXECUTORS
+
 taxi_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a taxi expert. Search for the exact taxi fare price and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+
 bus_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a public transport expert. Search for the bus/train ticket price and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+
 app_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a ride-hailing expert. Search for Uber/Bolt fare prices and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+
 transport_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Compare the Taxi, Bus, and App choices. Output a clean, simple bulleted list with NO introductory text like 'Comparison:'. Format exactly like this:\n- **Taxi**: [Price] ([Duration])\n- **Bus**: [Price] ([Duration])\n- **Uber/Bolt**: [Price] ([Duration])\n\n**Final Choice**: [Your short recommendation].")
 
 weather_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer.")
+
 activities_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer.")
 culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="Give 2-3 short cultural tips for visiting.")
+
 activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination. Use exactly three Markdown headers: '### 🌤️ Weather', '### 🎯 Top Activities', and '### 🏛️ Culture & Etiquette'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (6 short, punchy bullet points) . CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs. answer in short and clean way")
 
-tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer.") # 
+tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer.")
 
 _frankfurter_executor = None
 async def get_frankfurter_executor():
@@ -217,12 +222,10 @@ async def node_trip_deals(state: TravelPlanState):
     dates = flexible_date_range(60)
     exclude = {c.strip().lower() for c in state.get("exclude_destinations", []) if c and c.strip()}
 
-    # Try the requested departure airport first, then fall back to nearby
-    # Nordic hubs (skipping duplicates if the requested one is already a
-    # fallback) if there's no usable deal this run.
     departure_ids_to_try = [state["departure_id"]] + [
         d for d in DEPARTURE_FALLBACKS if d != state["departure_id"]
     ]
+
     print(f"[trip-deals] starting run: fallback_chain={departure_ids_to_try} exclude_destinations={state.get('exclude_destinations')}")
 
     best_flight = None
@@ -238,8 +241,6 @@ async def node_trip_deals(state: TravelPlanState):
 
     if not best_flight:
         print(f"[trip-deals] FINAL: no deal found across {departure_ids_to_try}")
-        # Keep the last raw flight response even on a "no deal found" run —
-        # useful for debugging why nothing matched across all fallbacks.
         return {"destination": None, "raw_flight_response": raw_flight_response}
 
     city, country = best_flight["name"], best_flight["country"]
@@ -266,6 +267,7 @@ async def node_trip_deals(state: TravelPlanState):
 async def node_transport(state: TravelPlanState):
     hotel_name = state['hotel'].get('name', state['hotel_area']) if state.get('hotel') else state['hotel_area']
     loc = f"{hotel_name}, {state['destination']}"
+
     query = f"Airport: {state['flight']['arrival_airport_code']}\nDates: {state['start_date']}-{state['end_date']}\nHotel: {loc}\nCRITICAL: Convert and state all prices in {state['home_currency']}."
     
     t_res, b_res, a_res = await asyncio.gather(
@@ -273,6 +275,7 @@ async def node_transport(state: TravelPlanState):
         bus_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         app_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
     )
+
     summary = f"Taxi: {t_res['messages'][-1].content}\nBus: {b_res['messages'][-1].content}\nApp: {a_res['messages'][-1].content}\nCRITICAL: Format all final output prices in {state['home_currency']}."
     final = await transport_main_agent.ainvoke({"messages": [HumanMessage(content=summary)]})
     return {"transport_summary": final["messages"][-1].content}
@@ -284,6 +287,7 @@ async def node_activities(state: TravelPlanState):
         activities_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         culture_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
     )
+
     summary = f"Weather: {w_res['messages'][-1].content}\nActs: {a_res['messages'][-1].content}\nCulture: {c_res['messages'][-1].content}\nCRITICAL: Format any prices mentioned in {state['home_currency']}."
     final = await activity_main_agent.ainvoke({"messages": [HumanMessage(content=summary)]})
     return {"activity_summary": final["messages"][-1].content}
@@ -350,12 +354,7 @@ async def generate_trip(
     exclude_destinations: str = "",
 ):
     """
-    Endpoint to trigger the LangGraph pipeline. 
-    Accepts query parameters for dynamic searches.
-
-    exclude_destinations: comma-separated list of country names to skip when
-    picking a flight deal (e.g. "United Kingdom,Spain"), used to avoid
-    repeating the same country across recent runs.
+    Endpoint to trigger the LangGraph pipeline via SSE.
     """
     inputs = {
         "departure_id": departure_id,
@@ -364,15 +363,30 @@ async def generate_trip(
         "home_currency": home_currency,
         "exclude_destinations": [c for c in exclude_destinations.split(",") if c.strip()],
     }
-    print(f"[generate-trip] request received: {inputs}")
     
-    try:
-        final_state = await graph.ainvoke(inputs)
-        
-        # Add a creation timestamp so the React frontend can track the 1-hour expiry
-        final_state["created_at"] = datetime.now(timezone.utc).isoformat()
-        
-        return final_state
-    except Exception as e:
-        print(f"[generate-trip] EXCEPTION: {e!r}")
-        raise HTTPException(status_code=500, detail=str(e))
+    async def event_stream():
+        current_state = inputs.copy()
+        try:
+            async for event in graph.astream(inputs):
+                for node_name, node_output in event.items():
+                    current_state.update(node_output)
+                    
+                    # Yield node status to frontend
+                    yield f"data: {json.dumps({'type': 'status', 'node': node_name})}\n\n"
+                    
+                    # If trip_deals failed to find a flight, stop early
+                    if node_name == "trip_deals" and not current_state.get("destination"):
+                        yield f"data: {json.dumps({'type': 'empty'})}\n\n"
+                        return
+                    
+                    # If synthesize is done, emit the complete payload
+                    if node_name == "synthesize":
+                        current_state["created_at"] = datetime.now(timezone.utc).isoformat()
+                        yield f"data: {json.dumps({'type': 'complete', 'data': current_state})}\n\n"
+                        
+        except Exception as e:
+            print(f"[generate-trip] EXCEPTION: {e!r}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    # StreamingResponse sends chunks in real-time
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
