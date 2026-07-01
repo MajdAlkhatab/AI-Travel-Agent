@@ -1,11 +1,11 @@
 # most important files
 
-Prompts/agent logic → api/generate-trip.py
+Prompts/agent logic           → api/generate-trip.py
 
-Frontend/UI → app/page.tsx
+Frontend/UI                   → app/page.tsx
 
-Schedule/timing → vercel.json
+Schedule/timing               → vercel.json
 
 how deals are saved/triggered → app/api/cron/route.ts
 
-How deals are read/served  → app/api/get-deals/route.ts
+How deals are read/served     → app/api/get-deals/route.ts
