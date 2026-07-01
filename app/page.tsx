@@ -302,17 +302,17 @@ function statusOf(id: string, phase: Phase): NodeStatus {
 
 function Beacon({ icon: Icon, label, status }: { icon: any; label: string; status: NodeStatus }) {
   return (
-    <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
-      <div className="relative flex items-center justify-center">
+    <div className="relative flex flex-col items-center justify-center flex-shrink-0 w-16">
+      <div className="relative flex items-center justify-center w-16 h-16">
         {status === 'active' && (
-          <span className="absolute w-[68px] h-[68px] rounded-full border-2 border-dashed border-green-400 th-radar-ring" />
+          <span className="absolute inset-0 rounded-full border-2 border-dashed border-green-400 th-radar-ring" />
         )}
         {status === 'active' && (
-          <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-30" />
+          <span className="absolute inset-2 rounded-full bg-green-500 animate-ping opacity-20" />
         )}
         <div
           className={
-            'relative w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors duration-500 ' +
+            'relative w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors duration-500 z-10 ' +
             (status === 'done'
               ? 'bg-emerald-700 border-emerald-600'
               : status === 'active'
@@ -321,15 +321,16 @@ function Beacon({ icon: Icon, label, status }: { icon: any; label: string; statu
           }
         >
           {status === 'done' ? (
-            <CheckCircle2 size={19} className="text-emerald-300" strokeWidth={2.5} />
+            <CheckCircle2 size={18} className="text-emerald-300" strokeWidth={2.5} />
           ) : (
-            <Icon size={19} className={status === 'active' ? 'text-slate-950' : 'text-slate-600'} strokeWidth={2} />
+            <Icon size={18} className={status === 'active' ? 'text-slate-950' : 'text-slate-600'} strokeWidth={2} />
           )}
         </div>
       </div>
+      {/* Label positioned absolutely so it doesn't affect the flex alignment axis */}
       <span
         className={
-          'text-[11px] font-semibold tracking-wide whitespace-nowrap transition-colors duration-500 ' +
+          'absolute top-full mt-2 text-[11px] font-semibold tracking-wide whitespace-nowrap transition-colors duration-500 ' +
           (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-green-400' : 'text-emerald-500')
         }
       >
@@ -343,7 +344,7 @@ function HConnector({ active }: { active: boolean }) {
   return (
     <div
       className={
-        'flex-1 min-w-[20px] h-0.5 mx-1.5 mb-5 rounded-full transition-colors duration-500 ' +
+        'flex-1 min-w-[24px] h-0.5 mx-1 rounded-full transition-colors duration-500 ' +
         (active ? 'bg-emerald-600' : 'bg-slate-700')
       }
     />
@@ -378,22 +379,21 @@ function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; stat
   );
 }
 
-// Updated ParallelBox to simulate a branching horizontal pipeline
 function BranchingParallelBox({ transport, activities, currency, activeOverall }: { transport: NodeStatus; activities: NodeStatus; currency: NodeStatus; activeOverall: boolean }) {
   return (
-    <div className="flex items-stretch mx-1 py-1 mb-5 flex-shrink-0">
+    <div className="relative flex items-stretch flex-shrink-0 mx-1">
       {/* Left Fork Bracket */}
-      <div className={`w-4 border-t-2 border-b-2 border-l-2 rounded-l-xl mt-3 mb-3 transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
+      <div className={`w-3 border-t-2 border-b-2 border-l-2 rounded-l-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
       
       {/* Central Items */}
-      <div className="flex flex-col gap-2.5 px-3 py-1 bg-slate-900/40 rounded-md z-10">
+      <div className="flex flex-col gap-2.5 px-3 py-2 bg-slate-900/40 rounded-md z-10 mx-1">
         <MiniRow icon={Bus} label="Transport" status={transport} />
         <MiniRow icon={Compass} label="Activities" status={activities} />
         <MiniRow icon={Coins} label="Currency" status={currency} />
       </div>
 
       {/* Right Fork Bracket */}
-      <div className={`w-4 border-t-2 border-b-2 border-r-2 rounded-r-xl mt-3 mb-3 transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
+      <div className={`w-3 border-t-2 border-b-2 border-r-2 rounded-r-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
     </div>
   );
 }
@@ -444,9 +444,11 @@ function PipelineStrip({
         @keyframes th-spin { to { transform: rotate(360deg); } }
         .th-blink { animation: th-blink-kf 1s step-end infinite; }
         @keyframes th-blink-kf { 50% { opacity: 0; } }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
       <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Radar size={15} className={isSettled ? 'text-slate-500' : 'text-green-400'} />
             <span className="text-slate-100 font-semibold text-sm">
@@ -466,7 +468,9 @@ function PipelineStrip({
           </div>
         </div>
 
-        <div className="flex items-start overflow-x-auto pb-1 hide-scrollbar">
+        {/* Use items-center to perfectly center the nodes and connectors. 
+            pb-8 accommodates the absolutely positioned text beneath the beacons */}
+        <div className="flex items-center overflow-x-auto pb-8 pt-4 hide-scrollbar">
           <Beacon icon={Radar} label="Received" status={statusOf('received', phase)} />
           <HConnector active={statusOf('flight', phase) !== 'pending'} />
           <Beacon icon={Plane} label="Flights" status={statusOf('flight', phase)} />
@@ -486,7 +490,7 @@ function PipelineStrip({
         </div>
 
         {!isSettled && (
-          <div className="bg-black/40 border border-slate-800 rounded-lg px-4 py-2 mt-1">
+          <div className="bg-black/40 border border-slate-800 rounded-lg px-4 py-2 mt-2">
             <p className="text-green-400 text-xs font-mono">
               {consoleLine}
               <span className="inline-block w-1.5 h-3 bg-green-400 ml-1 align-middle th-blink" />
@@ -495,7 +499,7 @@ function PipelineStrip({
         )}
 
         {phase === 'done' && deal && econ && (
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-2">
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-slate-100 font-semibold truncate">{deal.destination}, {deal.country}</span>
               {econ.totalSavingsPercent != null && (
@@ -517,7 +521,7 @@ function PipelineStrip({
         )}
 
         {(phase === 'empty' || phase === 'error') && (
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-2">
             <div className="flex items-center gap-2 min-w-0">
               <AlertTriangle size={16} className="text-red-400 flex-shrink-0" />
               <span className="text-slate-300 text-sm truncate">
