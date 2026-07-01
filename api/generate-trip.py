@@ -31,6 +31,11 @@ class Destination(BaseModel):
 
 structured_llm = llm.with_structured_output(Destination)
 
+# Departure airports to try, in order, if the requested one has no usable
+# deals this run. Stockholm Arlanda first (larger hub, more deal volume),
+# then Göteborg Landvetter. Swap the order below to prefer GOT first.
+DEPARTURE_FALLBACKS = ["ARN", "GOT"]  # Stockholm Arlanda, Göteborg Landvetter
+
 # --- 2. GRAPH STATE SCHEMA ---
 class TravelPlanState(TypedDict):
     departure_id: str
@@ -122,6 +127,20 @@ def hotel_discount_percent(hotel):
     match = re.search(r"(\d+)%", hotel.get("deal", ""))
     return int(match.group(1)) if match else 0
 
+def pick_best_flight(flights, exclude):
+    """Sort by discount and return the first deal with valid dates whose
+    country isn't in the excluded set. None if nothing qualifies."""
+    deals_by_discount = sorted(flights, key=lambda d: d.get("discount_percentage", 0), reverse=True)
+    return next(
+        (
+            f for f in deals_by_discount
+            if f.get("outbound_date")
+            and f.get("return_date")
+            and f.get("country", "").strip().lower() not in exclude
+        ),
+        None,
+    )
+
 @tool
 def web_search(query: str) -> str:
     """Search the web for current data (transport, weather, activities)."""
@@ -152,29 +171,29 @@ async def get_frankfurter_executor():
 # --- 4. LANGGRAPH NODES ---
 async def node_trip_deals(state: TravelPlanState):
     dates = flexible_date_range(60)
-    raw_flight_response = get_flight_deals(state["departure_id"], dates, travel_duration=state["duration"])
-    flights = raw_flight_response.get("deals", [])
-
-    deals_by_discount = sorted(flights, key=lambda d: d.get("discount_percentage", 0), reverse=True)
-
-    # Skip any deal whose country was one of the last N trips, so we don't
-    # keep resurfacing the same destination run after run. Walks the
-    # discount-sorted list until it finds the first country not excluded.
     exclude = {c.strip().lower() for c in state.get("exclude_destinations", []) if c and c.strip()}
-    best_flight = next(
-        (
-            f for f in deals_by_discount
-            if f.get("outbound_date")
-            and f.get("return_date")
-            and f.get("country", "").strip().lower() not in exclude
-        ),
-        None,
-    )
+
+    # Try the requested departure airport first, then fall back to nearby
+    # Nordic hubs (skipping duplicates if the requested one is already a
+    # fallback) if there's no usable deal this run.
+    departure_ids_to_try = [state["departure_id"]] + [
+        d for d in DEPARTURE_FALLBACKS if d != state["departure_id"]
+    ]
+
+    best_flight = None
+    raw_flight_response = None
+
+    for departure_id in departure_ids_to_try:
+        raw_flight_response = get_flight_deals(departure_id, dates, travel_duration=state["duration"])
+        flights = raw_flight_response.get("deals", [])
+        best_flight = pick_best_flight(flights, exclude)
+        if best_flight:
+            break
+        print(f"No usable flight deals from {departure_id}, trying next fallback airport...")
 
     if not best_flight:
-        # Keep the raw flight response even on a "no deal found" run — useful
-        # for debugging why nothing matched (empty inventory vs. everything
-        # excluded as a recent duplicate).
+        # Keep the last raw flight response even on a "no deal found" run —
+        # useful for debugging why nothing matched across all fallbacks.
         return {"destination": None, "raw_flight_response": raw_flight_response}
 
     city, country = best_flight["name"], best_flight["country"]
