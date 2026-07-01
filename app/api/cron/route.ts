@@ -55,6 +55,23 @@ export async function GET(request: Request) {
     }
 
     const newDeal = await agentResponse.json();
+    // Fetch live exchange rates (Base USD) and attach to the deal
+    try {
+      const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=SEK,EUR,GBP');
+      if (fxRes.ok) {
+        const fxData = await fxRes.json();
+        newDeal.exchange_rates = {
+          USD: 1,
+          SEK: fxData.rates.SEK,
+          EUR: fxData.rates.EUR,
+          GBP: fxData.rates.GBP
+        };
+      }
+    } catch (e) {
+      console.warn("Failed to fetch exchange rates, using fallbacks.");
+      // Safe fallback if the API hiccups
+      newDeal.exchange_rates = { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
+    }
 
     // 3. Bronze: persist the untouched raw SerpApi responses for this run,
     // one file per run, timestamped so nothing is ever overwritten. Saved

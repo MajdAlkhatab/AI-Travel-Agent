@@ -54,16 +54,16 @@ interface TravelDeal {
   final_itinerary: string;
   created_at: string; // ISO timestamp
   travelers?: number;
+  exchange_rates?: Record<string, number>;
 }
 
 // --- Pricing helpers ---------------------------------------------------
 
-// Static approximate exchange rates (Base: USD)
-const EXCHANGE_RATES: Record<string, number> = { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
 const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', SEK: 'kr', EUR: '€', GBP: '£' };
 
-function formatPrice(n: number, currency: string): string {
-  const rate = EXCHANGE_RATES[currency] || 1;
+// Now accepts dynamic rates passed from the freshest deal
+function formatPrice(n: number, currency: string, rates: Record<string, number>): string {
+  const rate = rates[currency] || 1;
   const converted = n * rate;
   const symbol = CURRENCY_SYMBOLS[currency] || '$';
   
@@ -73,7 +73,6 @@ function formatPrice(n: number, currency: string): string {
   return `${symbol}${Math.round(converted).toLocaleString()}`;
 }
 
-// Extracts "26" from a hotel deal string like "26% less than usual".
 function parseDealPercent(deal?: string): number | null {
   if (!deal) return null;
   const match = deal.match(/(\d+)\s*%/);
@@ -149,12 +148,14 @@ function PriceLine({
   current,
   original,
   currency,
+  rates,
   emphasize = false,
 }: {
   label: string;
   current: number | null;
   original: number | null;
   currency: string;
+  rates: Record<string, number>;
   emphasize?: boolean;
 }) {
   const showOriginal = original != null && current != null && original > current;
@@ -163,9 +164,9 @@ function PriceLine({
       <span className={emphasize ? 'font-semibold text-gray-900' : 'text-gray-500'}>{label}</span>
       <span className="flex items-baseline gap-1.5">
         <span className={emphasize ? 'font-semibold text-gray-900 text-base' : 'font-medium text-gray-900'}>
-          {current != null ? formatPrice(current, currency) : '—'}
+          {current != null ? formatPrice(current, currency, rates) : '—'}
         </span>
-        {showOriginal && <span className="text-xs text-gray-400 line-through">{formatPrice(original!, currency)}</span>}
+        {showOriginal && <span className="text-xs text-gray-400 line-through">{formatPrice(original!, currency, rates)}</span>}
       </span>
     </div>
   );
@@ -289,6 +290,9 @@ export default function Home() {
     return now.getTime() - createdTime > oneHourInMs;
   };
 
+  // Derive the freshest rates from the most recent deal, with a safety fallback
+  const latestRates = deals[0]?.exchange_rates || { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-6 md:p-12">
       {/* Header Section */}
@@ -361,7 +365,7 @@ export default function Home() {
                       <div className="absolute top-16 right-4 z-10 bg-green-600 rounded-lg px-3 py-1.5 shadow-md">
                         <div className="text-[10px] text-green-50 uppercase tracking-wide leading-none mb-0.5">You save</div>
                         <div className="text-lg font-semibold text-white leading-none">
-                          {formatPrice(econ.totalSavings!, displayCurrency)}
+                          {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
                           {econ.totalSavingsPercent != null && (
                             <span className="text-xs font-medium text-green-100 ml-1">({econ.totalSavingsPercent}%)</span>
                           )}
@@ -370,7 +374,7 @@ export default function Home() {
                     ) : econ.totalCurrent != null ? (
                       <div className="absolute top-16 right-4 z-10 bg-white rounded-lg px-3 py-1.5 shadow-md">
                         <div className="text-[10px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">Total</div>
-                        <div className="text-lg font-semibold text-gray-900 leading-none">{formatPrice(econ.totalCurrent, displayCurrency)}</div>
+                        <div className="text-lg font-semibold text-gray-900 leading-none">{formatPrice(econ.totalCurrent, displayCurrency, latestRates)}</div>
                       </div>
                     ) : null}
 
@@ -404,15 +408,16 @@ export default function Home() {
                       </div>
 
                       <div className="space-y-2 text-sm">
-                        <PriceLine label={`Flight · ${deal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} />
+                        <PriceLine label={`Flight · ${deal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} rates={latestRates} />
                         <PriceLine
                           label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
                           current={econ.hotelTotalCurrent}
                           original={econ.hotelTotalOriginal}
                           currency={displayCurrency}
+                          rates={latestRates}
                         />
                         <div className="pt-2 border-t border-gray-200">
-                          <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} emphasize />
+                          <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} rates={latestRates} emphasize />
                         </div>
                       </div>
                     </div>
@@ -577,21 +582,22 @@ export default function Home() {
               <div>
                 <h3 className="font-semibold text-gray-900 text-base mb-3">Price breakdown</h3>
                 <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2">
-                  <PriceLine label={`Flight · ${selectedDeal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} />
+                  <PriceLine label={`Flight · ${selectedDeal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} rates={latestRates} />
                   <PriceLine
                     label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
                     current={econ.hotelTotalCurrent}
                     original={econ.hotelTotalOriginal}
                     currency={displayCurrency}
+                    rates={latestRates}
                   />
                   <div className="pt-2 border-t border-gray-200">
-                    <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} emphasize />
+                    <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} rates={latestRates} emphasize />
                   </div>
                   {econ.hasSavings && (
                     <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2 mt-1">
                       <span className="text-xs font-medium text-green-800">You save</span>
                       <span className="text-sm font-semibold text-green-900">
-                        {formatPrice(econ.totalSavings!, displayCurrency)}
+                        {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
                         {econ.totalSavingsPercent != null && (
                           <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>
                         )}
