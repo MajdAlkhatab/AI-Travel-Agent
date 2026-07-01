@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
+import {
+  Radar, Plane, BedDouble, Bus, Compass, Coins, Sparkles,
+  CheckCircle2, Clock, X, AlertTriangle, RefreshCw,
+} from 'lucide-react';
+// npm install lucide-react
 
 interface Flight {
   airline?: string;
@@ -61,12 +66,11 @@ interface TravelDeal {
 
 const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', SEK: 'kr', EUR: '€', GBP: '£' };
 
-// Now accepts dynamic rates passed from the freshest deal
 function formatPrice(n: number, currency: string, rates: Record<string, number>): string {
   const rate = rates[currency] || 1;
   const converted = n * rate;
   const symbol = CURRENCY_SYMBOLS[currency] || '$';
-  
+
   if (currency === 'SEK') {
     return `${Math.round(converted).toLocaleString()} ${symbol}`;
   }
@@ -205,12 +209,11 @@ function FormattedText({ text }: { text: string }) {
   lines.forEach((line, idx) => {
     const bulletMatch = line.match(/^[-*]\s+(.*)/);
     const numberedMatch = line.match(/^\d+\.\s+(.*)/);
-    const headerMatch = line.match(/^(#{1,3})\s+(.*)/); // Detects Markdown headers (##, ###)
+    const headerMatch = line.match(/^(#{1,3})\s+(.*)/);
 
     if (headerMatch) {
       flushList();
       const content = headerMatch[2];
-      // Render as a bold header with proper spacing
       blocks.push(
         <h3 key={`h-${idx}`} className="font-semibold text-indigo-950 text-sm mt-5 mb-2">
           {renderInline(content)}
@@ -232,13 +235,304 @@ function FormattedText({ text }: { text: string }) {
   return <div>{blocks}</div>;
 }
 
+// --- Brand ------------------------------------------------------------
+
+function Logo() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="relative w-9 h-9 flex items-center justify-center rounded-full bg-slate-950 flex-shrink-0">
+        <span className="absolute inset-0 rounded-full border border-amber-400 opacity-60" />
+        <Radar size={17} className="text-amber-400" strokeWidth={2.25} />
+      </div>
+      <span className="text-2xl font-bold tracking-tight">
+        <span className="text-slate-900">Trip</span>
+        <span className="text-amber-500">Hunter</span>
+      </span>
+    </div>
+  );
+}
+
+function useNextScan() {
+  const [label, setLabel] = useState('');
+  useEffect(() => {
+    const compute = () => {
+      const hours = [9, 12, 15, 18];
+      const now = new Date();
+      const next = hours.find((h) => h > now.getHours());
+      const target = new Date(now);
+      if (next === undefined) {
+        target.setDate(target.getDate() + 1);
+        target.setHours(hours[0], 0, 0, 0);
+      } else {
+        target.setHours(next, 0, 0, 0);
+      }
+      setLabel(target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    };
+    compute();
+    const t = setInterval(compute, 60000);
+    return () => clearInterval(t);
+  }, []);
+  return label;
+}
+
+function NextScanPill() {
+  const label = useNextScan();
+  if (!label) return null;
+  return (
+    <div className="hidden md:flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 text-xs text-gray-500 shadow-sm">
+      <Clock size={12} className="text-amber-500" />
+      Next scan {label}
+    </div>
+  );
+}
+
+// --- Pipeline strip (inline, horizontal, no overlay) -----------------------
+
+type Phase = 'idle' | 'received' | 'flight' | 'hotel' | 'parallel' | 'synthesize' | 'done' | 'empty' | 'error';
+type NodeStatus = 'pending' | 'active' | 'done';
+
+function statusOf(id: string, phase: Phase): NodeStatus {
+  const order = ['received', 'flight', 'hotel', 'parallel', 'synthesize'];
+  const idx = order.indexOf(id);
+  const currentIdx = order.indexOf(phase);
+  if (phase === 'idle') return 'pending';
+  if (phase === 'done' || phase === 'empty' || phase === 'error') return 'done';
+  if (idx < currentIdx) return 'done';
+  if (idx === currentIdx) return 'active';
+  return 'pending';
+}
+
+function Beacon({ icon: Icon, label, status }: { icon: any; label: string; status: NodeStatus }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+      <div className="relative flex items-center justify-center">
+        {status === 'active' && (
+          <span className="absolute w-[68px] h-[68px] rounded-full border-2 border-dashed border-amber-400 th-radar-ring" />
+        )}
+        {status === 'active' && (
+          <span className="absolute inset-0 rounded-full bg-amber-500 animate-ping opacity-30" />
+        )}
+        <div
+          className={
+            'relative w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors duration-500 ' +
+            (status === 'done'
+              ? 'bg-emerald-500 border-emerald-400'
+              : status === 'active'
+              ? 'bg-amber-500 border-amber-400'
+              : 'bg-slate-900 border-slate-700')
+          }
+        >
+          {status === 'done' ? (
+            <CheckCircle2 size={19} className="text-slate-950" strokeWidth={2.5} />
+          ) : (
+            <Icon size={19} className={status === 'active' ? 'text-slate-950' : 'text-slate-600'} strokeWidth={2} />
+          )}
+        </div>
+      </div>
+      <span
+        className={
+          'text-[11px] font-semibold tracking-wide whitespace-nowrap transition-colors duration-500 ' +
+          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-amber-300' : 'text-emerald-300')
+        }
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function HConnector({ active }: { active: boolean }) {
+  return (
+    <div
+      className={
+        'flex-1 min-w-[20px] h-0.5 mx-1.5 mb-5 rounded-full transition-colors duration-500 ' +
+        (active ? 'bg-emerald-500' : 'bg-slate-700')
+      }
+    />
+  );
+}
+
+function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; status: NodeStatus }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className={
+          'w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-500 ' +
+          (status === 'done' ? 'bg-emerald-500' : status === 'active' ? 'bg-amber-500' : 'bg-slate-800')
+        }
+      >
+        {status === 'done' ? (
+          <CheckCircle2 size={11} className="text-slate-950" />
+        ) : (
+          <Icon size={11} className={status === 'active' ? 'text-slate-950' : 'text-slate-500'} />
+        )}
+      </div>
+      <span
+        className={
+          'text-[11px] font-medium whitespace-nowrap ' +
+          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-amber-300' : 'text-emerald-300')
+        }
+      >
+        {label}
+      </span>
+      {status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />}
+    </div>
+  );
+}
+
+function ParallelBox({ transport, activities, currency }: { transport: NodeStatus; activities: NodeStatus; currency: NodeStatus }) {
+  return (
+    <div className="flex flex-col gap-1.5 border border-dashed border-slate-700 rounded-xl px-3 py-2.5 bg-slate-900/60 flex-shrink-0 mb-5">
+      <MiniRow icon={Bus} label="Transport" status={transport} />
+      <MiniRow icon={Compass} label="Activities" status={activities} />
+      <MiniRow icon={Coins} label="Currency" status={currency} />
+    </div>
+  );
+}
+
+function PipelineStrip({
+  phase,
+  elapsedSec,
+  deal,
+  currency,
+  rates,
+  errorMessage,
+  subDone,
+  onClose,
+  onRetry,
+}: {
+  phase: Phase;
+  elapsedSec: number;
+  deal: TravelDeal | null;
+  currency: string;
+  rates: Record<string, number>;
+  errorMessage: string | null;
+  subDone: { transport: boolean; activities: boolean; currency: boolean };
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  const isSettled = phase === 'done' || phase === 'empty' || phase === 'error';
+  const parallelOverall = statusOf('parallel', phase);
+
+  const subStatus = (done: boolean): NodeStatus =>
+    parallelOverall === 'pending' ? 'pending' : parallelOverall === 'done' ? 'done' : done ? 'done' : 'active';
+
+  const consoleLine =
+    phase === 'received' ? '> request received'
+    : phase === 'flight' ? '> scanning flight deals...'
+    : phase === 'hotel' ? '> found a flight — checking hotels...'
+    : phase === 'parallel' ? '> researching transport, activities, currency in parallel...'
+    : phase === 'synthesize' ? '> writing the itinerary...'
+    : '';
+
+  const mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+  const ss = String(elapsedSec % 60).padStart(2, '0');
+  const econ = deal ? getDealEconomics(deal) : null;
+
+  return (
+    <div className="max-w-6xl mx-auto mb-8">
+      <style>{`
+        .th-radar-ring { animation: th-spin 2.6s linear infinite; }
+        @keyframes th-spin { to { transform: rotate(360deg); } }
+        .th-blink { animation: th-blink-kf 1s step-end infinite; }
+        @keyframes th-blink-kf { 50% { opacity: 0; } }
+      `}</style>
+      <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Radar size={15} className={isSettled ? 'text-slate-500' : 'text-amber-400'} />
+            <span className="text-slate-100 font-semibold text-sm">
+              {phase === 'done' ? 'Deal found'
+                : phase === 'empty' ? 'No deal this round'
+                : phase === 'error' ? 'Something went wrong'
+                : 'Hunting for your next trip'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-slate-500 text-xs flex items-center gap-1 font-mono">
+              <Clock size={11} /> {mm}:{ss}
+            </span>
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-start overflow-x-auto pb-1">
+          <Beacon icon={Radar} label="Received" status={statusOf('received', phase)} />
+          <HConnector active={statusOf('flight', phase) !== 'pending'} />
+          <Beacon icon={Plane} label="Flights" status={statusOf('flight', phase)} />
+          <HConnector active={statusOf('hotel', phase) !== 'pending'} />
+          <Beacon icon={BedDouble} label="Hotels" status={statusOf('hotel', phase)} />
+          <HConnector active={parallelOverall !== 'pending'} />
+          <ParallelBox
+            transport={subStatus(subDone.transport)}
+            activities={subStatus(subDone.activities)}
+            currency={subStatus(subDone.currency)}
+          />
+          <HConnector active={statusOf('synthesize', phase) !== 'pending'} />
+          <Beacon icon={Sparkles} label="Itinerary" status={statusOf('synthesize', phase)} />
+        </div>
+
+        {!isSettled && (
+          <div className="bg-black/40 border border-slate-800 rounded-lg px-4 py-2 mt-1">
+            <p className="text-emerald-400 text-xs font-mono">
+              {consoleLine}
+              <span className="inline-block w-1.5 h-3 bg-emerald-400 ml-1 align-middle th-blink" />
+            </p>
+          </div>
+        )}
+
+        {phase === 'done' && deal && econ && (
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-1">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-slate-100 font-semibold truncate">{deal.destination}, {deal.country}</span>
+              {econ.totalSavingsPercent != null && (
+                <span className="bg-emerald-500/10 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0">
+                  -{econ.totalSavingsPercent}%
+                </span>
+              )}
+              {econ.totalCurrent != null && (
+                <span className="text-slate-400 text-sm flex-shrink-0">{formatPrice(econ.totalCurrent, currency, rates)}</span>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="flex-shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+            >
+              View trip
+            </button>
+          </div>
+        )}
+
+        {(phase === 'empty' || phase === 'error') && (
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" />
+              <span className="text-slate-300 text-sm truncate">
+                {errorMessage || (phase === 'empty' ? 'No eligible flight deal turned up this round.' : 'Could not reach the agents.')}
+              </span>
+            </div>
+            <button
+              onClick={onRetry}
+              className="flex-shrink-0 flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+            >
+              <RefreshCw size={13} /> Try again
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function Home() {
   const [deals, setDeals] = useState<TravelDeal[]>([]);
   const [selectedDeal, setSelectedDeal] = useState<TravelDeal | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'daily_plan' | 'guide'>('overview');
   const [loading, setLoading] = useState(true);
-  const [triggeringAgent, setTriggeringAgent] = useState(false);
   const [now, setNow] = useState(new Date());
   const [showTriggerForm, setShowTriggerForm] = useState(false);
   const [displayCurrency, setDisplayCurrency] = useState('USD');
@@ -249,10 +543,25 @@ export default function Home() {
     homeCurrency: 'SEK',
   });
 
+  // --- Pipeline state ---
+  const [pipelinePhase, setPipelinePhase] = useState<Phase>('idle');
+  const [pipelineDeal, setPipelineDeal] = useState<TravelDeal | null>(null);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [subDone, setSubDone] = useState({ transport: false, activities: false, currency: false });
+  const runIdRef = useRef(0);
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 10000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const isRunning = pipelinePhase !== 'idle' && !['done', 'empty', 'error'].includes(pipelinePhase);
+    if (!isRunning) return;
+    const t = setInterval(() => setElapsedSec((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [pipelinePhase]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -271,31 +580,6 @@ export default function Home() {
     loadData();
   }, []);
 
-  const triggerManualRun = async (params?: typeof triggerParams) => {
-    setTriggeringAgent(true);
-    try {
-      const query = params
-        ? `?${new URLSearchParams({
-            departure_id: params.departureId,
-            travelers: String(params.travelers),
-            duration: params.duration,
-            home_currency: params.homeCurrency,
-          }).toString()}`
-        : '';
-      const res = await fetch(`/api/cron${query}`);
-      const data = await res.json();
-      if (data.success) {
-        window.location.reload();
-      } else {
-        alert(data.message || "Agent run did not produce a new deal.");
-      }
-    } catch (err) {
-      alert("Failed to run agents manually.");
-    } finally {
-      setTriggeringAgent(false);
-    }
-  };
-
   const isExpired = (createdAtString: string) => {
     if (!createdAtString) return false;
     const createdTime = new Date(createdAtString).getTime();
@@ -305,15 +589,81 @@ export default function Home() {
 
   const latestRates = deals[0]?.exchange_rates || { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
 
+  // Drives the strip against the real /api/cron call. The first three
+  // phases advance on a short fixed delay (they're genuinely fast); from
+  // 'parallel' onward the strip holds honestly until the actual fetch
+  // resolves, since that's where real, unpredictable time is spent.
+  const triggerManualRun = async (params: typeof triggerParams) => {
+    const runId = ++runIdRef.current;
+    setPipelineDeal(null);
+    setPipelineError(null);
+    setElapsedSec(0);
+    setSubDone({ transport: false, activities: false, currency: false });
+    setPipelinePhase('received');
+
+    await delay(500);
+    if (runIdRef.current !== runId) return;
+    setPipelinePhase('flight');
+
+    await delay(900);
+    if (runIdRef.current !== runId) return;
+    setPipelinePhase('hotel');
+
+    await delay(900);
+    if (runIdRef.current !== runId) return;
+    setPipelinePhase('parallel');
+
+    const t1 = setTimeout(() => { if (runIdRef.current === runId) setSubDone((s) => ({ ...s, transport: true })); }, 1400);
+    const t2 = setTimeout(() => { if (runIdRef.current === runId) setSubDone((s) => ({ ...s, activities: true })); }, 2200);
+    const t3 = setTimeout(() => { if (runIdRef.current === runId) setSubDone((s) => ({ ...s, currency: true })); }, 3000);
+
+    try {
+      const query = `?${new URLSearchParams({
+        departure_id: params.departureId,
+        travelers: String(params.travelers),
+        duration: params.duration,
+        home_currency: params.homeCurrency,
+      }).toString()}`;
+      const res = await fetch(`/api/cron${query}`);
+      const data = await res.json();
+      if (runIdRef.current !== runId) return;
+
+      if (data.success && data.deal) {
+        setPipelinePhase('synthesize');
+        await delay(700);
+        if (runIdRef.current !== runId) return;
+        setPipelineDeal(data.deal);
+        setPipelinePhase('done');
+        setDeals((prev) => [data.deal, ...prev].slice(0, 9));
+      } else {
+        setPipelineError(data.message || null);
+        setPipelinePhase('empty');
+      }
+    } catch (err) {
+      if (runIdRef.current !== runId) return;
+      setPipelineError('Could not reach the agents. Check your connection and try again.');
+      setPipelinePhase('error');
+    } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    }
+  };
+
+  const closePipeline = () => {
+    runIdRef.current++; // invalidate any in-flight run
+    setPipelinePhase('idle');
+  };
+
+  const isPipelineBusy = pipelinePhase !== 'idle' && !['done', 'empty', 'error'].includes(pipelinePhase);
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-6 md:p-12">
       {/* Header Section */}
-      <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">AI Travel Agent Dashboard</h1>
-          <p className="text-gray-500 mt-1 text-sm">Automated pipeline updates at 09:00, 12:00, 15:00, and 18:00</p>
-        </div>
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <Logo />
         <div className="flex items-center gap-3 w-full md:w-auto">
+          <NextScanPill />
           <select
             value={displayCurrency}
             onChange={(e) => setDisplayCurrency(e.target.value)}
@@ -326,13 +676,29 @@ export default function Home() {
           </select>
           <button
             onClick={() => setShowTriggerForm(true)}
-            disabled={triggeringAgent}
-            className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:bg-blue-400"
+            disabled={isPipelineBusy}
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
           >
-            {triggeringAgent ? 'Running...' : 'Trigger Agents'}
+            <Radar size={15} className="text-amber-400" />
+            {isPipelineBusy ? 'Hunting...' : 'Hunt for deals'}
           </button>
         </div>
       </div>
+
+      {/* Pipeline strip — inline, no overlay */}
+      {pipelinePhase !== 'idle' && (
+        <PipelineStrip
+          phase={pipelinePhase}
+          elapsedSec={elapsedSec}
+          deal={pipelineDeal}
+          currency={displayCurrency}
+          rates={latestRates}
+          errorMessage={pipelineError}
+          subDone={subDone}
+          onClose={closePipeline}
+          onRetry={() => triggerManualRun(triggerParams)}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="max-w-6xl mx-auto">
@@ -548,10 +914,11 @@ export default function Home() {
                 setShowTriggerForm(false);
                 triggerManualRun(triggerParams);
               }}
-              disabled={triggeringAgent}
-              className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:bg-blue-400"
+              disabled={isPipelineBusy}
+              className="w-full mt-6 flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
             >
-              {triggeringAgent ? 'Running...' : 'Run agents'}
+              <Radar size={15} className="text-amber-400" />
+              Hunt for deals
             </button>
           </div>
         </div>
@@ -663,7 +1030,7 @@ export default function Home() {
 
                     <div className="flex gap-3 mt-4">
                       {selectedDeal.flight?.flight_link && (
-                        <a
+                        
                           href={selectedDeal.flight.flight_link}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -673,9 +1040,8 @@ export default function Home() {
                         </a>
                       )}
                       
-                      {/* UPDATED: Book Hotel Button with Google Search Fallback */}
                       {selectedDeal.hotel?.name && (
-                        <a
+                        
                           href={selectedDeal.hotel?.link || `https://www.google.com/travel/search?q=${encodeURIComponent(`${selectedDeal.hotel.name} ${selectedDeal.destination} ${selectedDeal.country}`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
