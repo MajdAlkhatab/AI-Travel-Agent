@@ -224,6 +224,7 @@ function FormattedText({ text }: { text: string }) {
 export default function Home() {
   const [deals, setDeals] = useState<TravelDeal[]>([]);
   const [selectedDeal, setSelectedDeal] = useState<TravelDeal | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'itinerary' | 'guide'>('overview');
   const [loading, setLoading] = useState(true);
   const [triggeringAgent, setTriggeringAgent] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -290,7 +291,6 @@ export default function Home() {
     return now.getTime() - createdTime > oneHourInMs;
   };
 
-  // Derive the freshest rates from the most recent deal, with a safety fallback
   const latestRates = deals[0]?.exchange_rates || { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
 
   return (
@@ -340,7 +340,10 @@ export default function Home() {
               return (
                 <div
                   key={idx}
-                  onClick={() => setSelectedDeal(deal)}
+                  onClick={() => {
+                    setSelectedDeal(deal);
+                    setActiveTab('overview');
+                  }}
                   className="group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-lg transition-shadow cursor-pointer relative flex flex-col h-full"
                 >
                   <div className="relative h-44 overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900">
@@ -550,10 +553,11 @@ export default function Home() {
           onClick={() => setSelectedDeal(null)}
         >
           <div
-            className="bg-white rounded-2xl max-w-2xl w-full max-h-[88vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col"
+            className="bg-white rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-gray-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative h-56 flex-shrink-0">
+            {/* Hero Header */}
+            <div className="relative h-56 flex-shrink-0 rounded-t-2xl overflow-hidden">
               {selectedDeal.flight?.thumbnail ? (
                 <img
                   src={selectedDeal.flight.thumbnail}
@@ -566,7 +570,7 @@ export default function Home() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
               <button
                 onClick={() => setSelectedDeal(null)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-gray-600 font-semibold transition-colors"
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-gray-600 font-semibold transition-colors z-10"
               >
                 ✕
               </button>
@@ -578,126 +582,168 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="p-6 space-y-6 text-sm text-gray-700 leading-relaxed">
-              <div>
-                <h3 className="font-semibold text-gray-900 text-base mb-3">Price breakdown</h3>
-                <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2">
-                  <PriceLine label={`Flight · ${selectedDeal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} rates={latestRates} />
-                  <PriceLine
-                    label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
-                    current={econ.hotelTotalCurrent}
-                    original={econ.hotelTotalOriginal}
-                    currency={displayCurrency}
-                    rates={latestRates}
-                  />
-                  <div className="pt-2 border-t border-gray-200">
-                    <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} rates={latestRates} emphasize />
-                  </div>
-                  {econ.hasSavings && (
-                    <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2 mt-1">
-                      <span className="text-xs font-medium text-green-800">You save</span>
-                      <span className="text-sm font-semibold text-green-900">
-                        {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
-                        {econ.totalSavingsPercent != null && (
-                          <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>
-                        )}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-100 px-6 pt-2 shrink-0 bg-white">
+              <button 
+                onClick={() => setActiveTab('overview')} 
+                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'overview' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+              >
+                Overview
+              </button>
+              <button 
+                onClick={() => setActiveTab('itinerary')} 
+                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'itinerary' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+              >
+                Itinerary
+              </button>
+              <button 
+                onClick={() => setActiveTab('guide')} 
+                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'guide' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+              >
+                Local Guide
+              </button>
+            </div>
 
-              <div>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{selectedDeal.hotel?.name}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <StarRating rating={selectedDeal.hotel?.overall_rating} />
-                      {selectedDeal.hotel?.overall_rating && (
-                        <span className="text-gray-400 text-xs">({selectedDeal.hotel?.reviews ?? 0})</span>
+            {/* Scrollable Content Area */}
+            <div className="p-6 overflow-y-auto text-sm text-gray-700 leading-relaxed rounded-b-2xl bg-white">
+              
+              {/* Tab 1: Overview */}
+              {activeTab === 'overview' && (
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex justify-between items-end mb-3">
+                      <h3 className="font-semibold text-gray-900 text-base">Price breakdown</h3>
+                      {selectedDeal.currency_summary && (
+                        <span 
+                          className="text-xs font-medium text-gray-400 flex items-center gap-1 cursor-help hover:text-gray-600 transition-colors" 
+                          title={selectedDeal.currency_summary}
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
+                          Live Rates
+                        </span>
                       )}
                     </div>
-                    {selectedDeal.hotel?.deal_description && (
-                      <span className="inline-block text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full mt-1.5">
-                        {selectedDeal.hotel.deal_description}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0 text-xs">
-                    {selectedDeal.flight?.flight_link && (
-                      <a
-                        href={selectedDeal.flight.flight_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 font-medium hover:underline"
-                      >
-                        View flight →
-                      </a>
-                    )}
-                    {selectedDeal.hotel?.link && (
-                      <a
-                        href={selectedDeal.hotel.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 font-medium hover:underline"
-                      >
-                        View hotel →
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                <p className="text-gray-500 mt-3">
-                  Travel window: {selectedDeal.start_date} to {selectedDeal.end_date} • 👥 {selectedDeal.travelers || 2} Persons • ✈️ {selectedDeal.flight?.departure_airport_code || 'Origin'} → {selectedDeal.flight?.arrival_airport_code || 'Dest'}
-                </p>
-
-                {selectedDeal.hotel?.images && selectedDeal.hotel.images.length > 0 && (
-                  <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-                    {selectedDeal.hotel.images.slice(0, 4).map((img, i) => (
-                      <img
-                        key={i}
-                        src={img.thumbnail}
-                        alt={`${selectedDeal.hotel?.name || 'Hotel'} photo ${i + 1}`}
-                        className="w-24 h-20 object-cover rounded-lg flex-shrink-0"
+                    
+                    <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2">
+                      <PriceLine label={`Flight · ${selectedDeal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} rates={latestRates} />
+                      <PriceLine
+                        label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
+                        current={econ.hotelTotalCurrent}
+                        original={econ.hotelTotalOriginal}
+                        currency={displayCurrency}
+                        rates={latestRates}
                       />
-                    ))}
+                      <div className="pt-2 border-t border-gray-200">
+                        <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} rates={latestRates} emphasize />
+                      </div>
+                      {econ.hasSavings && (
+                        <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2 mt-1">
+                          <span className="text-xs font-medium text-green-800">You save</span>
+                          <span className="text-sm font-semibold text-green-900">
+                            {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
+                            {econ.totalSavingsPercent != null && (
+                              <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-3 mt-4">
+                      {selectedDeal.flight?.flight_link && (
+                        <a
+                          href={selectedDeal.flight.flight_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
+                        >
+                          Book Flight
+                        </a>
+                      )}
+                      {selectedDeal.hotel?.link && (
+                        <a
+                          href={selectedDeal.hotel.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
+                        >
+                          Book Hotel
+                        </a>
+                      )}
+                    </div>
                   </div>
-                )}
 
-                {selectedDeal.hotel?.amenities && selectedDeal.hotel.amenities.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {selectedDeal.hotel.amenities.map((a, i) => (
-                      <span key={i} className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">{a}</span>
-                    ))}
+                  <div className="border-t border-gray-100 pt-5">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{selectedDeal.hotel?.name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <StarRating rating={selectedDeal.hotel?.overall_rating} />
+                        {selectedDeal.hotel?.overall_rating && (
+                          <span className="text-gray-400 text-xs">({selectedDeal.hotel?.reviews ?? 0})</span>
+                        )}
+                      </div>
+                      {selectedDeal.hotel?.deal_description && (
+                        <span className="inline-block text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full mt-1.5">
+                          {selectedDeal.hotel.deal_description}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-gray-500 mt-3">
+                      Travel window: {selectedDeal.start_date} to {selectedDeal.end_date} • 👥 {selectedDeal.travelers || 2} Persons • ✈️ {selectedDeal.flight?.departure_airport_code || 'Origin'} → {selectedDeal.flight?.arrival_airport_code || 'Dest'}
+                    </p>
+
+                    {selectedDeal.hotel?.images && selectedDeal.hotel.images.length > 0 && (
+                      <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                        {selectedDeal.hotel.images.slice(0, 4).map((img, i) => (
+                          <img
+                            key={i}
+                            src={img.thumbnail}
+                            alt={`${selectedDeal.hotel?.name || 'Hotel'} photo ${i + 1}`}
+                            className="w-24 h-20 object-cover rounded-lg flex-shrink-0"
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {selectedDeal.hotel?.amenities && selectedDeal.hotel.amenities.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {selectedDeal.hotel.amenities.map((a, i) => (
+                          <span key={i} className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">{a}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-
-              <div className="border-t border-gray-100 pt-5">
-                <h3 className="font-semibold text-gray-900 text-base mb-2">Ground transportation</h3>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <FormattedText text={selectedDeal.transport_summary} />
                 </div>
-              </div>
+              )}
 
-              <div className="border-t border-gray-100 pt-5">
-                <h3 className="font-semibold text-gray-900 text-base mb-2">Activities &amp; local culture</h3>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <FormattedText text={selectedDeal.activity_summary} />
+              {/* Tab 2: Itinerary */}
+              {activeTab === 'itinerary' && (
+                <div className="bg-indigo-50/30 p-5 rounded-xl border border-indigo-100">
+                  <h3 className="font-semibold text-indigo-950 text-base mb-2">Suggested Daily Schedule</h3>
+                  <FormattedText text={selectedDeal.final_itinerary} />
                 </div>
-              </div>
+              )}
 
-              <div className="border-t border-gray-100 pt-5">
-                <h3 className="font-semibold text-gray-900 text-base mb-2">Currency exchange</h3>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <FormattedText text={selectedDeal.currency_summary} />
+              {/* Tab 3: Local Guide */}
+              {activeTab === 'guide' && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-base mb-2">Ground transportation</h3>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      <FormattedText text={selectedDeal.transport_summary} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-base mb-2">Activities &amp; local culture</h3>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      <FormattedText text={selectedDeal.activity_summary} />
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <div className="border-t border-indigo-100 bg-indigo-50/50 p-4 rounded-xl">
-                <h3 className="font-semibold text-indigo-950 text-base mb-2">Full itinerary</h3>
-                <FormattedText text={selectedDeal.final_itinerary} />
-              </div>
+              )}
+              
             </div>
           </div>
         </div>

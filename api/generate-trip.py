@@ -303,13 +303,13 @@ async def node_currency(state: TravelPlanState):
 
 async def node_synthesize(state: TravelPlanState):
     prompt = f"""
-    You are a professional travel agent. Provide a punchy, highly summarized itinerary. Use bullet points.
+    You are a professional travel agent. Provide ONLY a punchy, day-by-day itinerary for the trip. Use bullet points.
+    
+    CRITICAL INSTRUCTION: DO NOT summarize or mention the flight details, hotel names, prices, weather forecasts, or currency exchange rates in this output. The frontend UI already handles those details. Your output should strictly be the daily schedule of activities.
+
     Destination: {state['destination']}, {state['country']} ({state['start_date']} to {state['end_date']})
-    Flight: {state['flight'].get('airline')} - ${state['flight'].get('price')} ({state['flight'].get('discount_percentage')}% off)
-    Hotel: {state.get('hotel', {}).get('name', 'N/A')} - {state.get('hotel', {}).get('deal', 'No deal found')}
-    Transport Route: {state['transport_summary']}
-    Activities/Weather: {state['activity_summary']}
-    Currency: {state['currency_summary']}
+    Transport Context: {state['transport_summary']}
+    Activities/Culture Context: {state['activity_summary']}
     """
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     return {"final_itinerary": response.content}
