@@ -1,10 +1,10 @@
-python-dotenv
+langchain-mcp-adapters
 langchain-openai
+python-dotenv
+tavily-python
 langchain
 langgraph
-tavily-python
-serpapi
 pydantic
+serpapi
 fastapi
 uvicorn
-langchain-mcp-adapters
