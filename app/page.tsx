@@ -589,10 +589,6 @@ export default function Home() {
 
   const latestRates = deals[0]?.exchange_rates || { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
 
-  // Drives the strip against the real /api/cron call. The first three
-  // phases advance on a short fixed delay (they're genuinely fast); from
-  // 'parallel' onward the strip holds honestly until the actual fetch
-  // resolves, since that's where real, unpredictable time is spent.
   const triggerManualRun = async (params: typeof triggerParams) => {
     const runId = ++runIdRef.current;
     setPipelineDeal(null);
@@ -651,7 +647,7 @@ export default function Home() {
   };
 
   const closePipeline = () => {
-    runIdRef.current++; // invalidate any in-flight run
+    runIdRef.current++;
     setPipelinePhase('idle');
   };
 
