@@ -411,7 +411,7 @@ export default function Home() {
                     </div>
 
                     <div className="border-t border-gray-100 pt-4 mt-4 flex justify-between items-center text-xs text-gray-400">
-                      <span>Dates: {deal.start_date}</span>
+                      <span>Dates: {deal.start_date} - {deal.end_date}</span>
                       <span>Generated: {new Date(deal.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
