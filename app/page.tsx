@@ -75,47 +75,48 @@ function nightsBetween(start?: string, end?: string): number | null {
   return Math.round((e - s) / (1000 * 60 * 60 * 24));
 }
 
-// Derives original price, savings, and a combined total for a deal.
-// Flight uses the real average_price SerpApi returns. Hotels only give us
-// a discount percentage in the `deal` text (e.g. "26% less than usual"),
-// so the original nightly rate is back-calculated from that — an estimate,
-// not a directly-reported figure.
+// Simple before/after economics for a deal: flight price, hotel TOTAL price
+// for the whole stay (not per-night), and a combined total — each with a
+// current and an original figure where available.
+//
+// Flight original comes straight from SerpApi (average_price). Hotels only
+// give us a discount percentage in text (e.g. "26% less than usual"), so
+// the original total is back-calculated from that — an estimate, not a
+// directly-reported figure.
 function getDealEconomics(deal: TravelDeal) {
-  const flightCurrent = deal.flight?.price;
-  const flightOriginal = deal.flight?.average_price;
-  const flightSavings =
-    flightOriginal != null && flightCurrent != null && flightOriginal > flightCurrent
-      ? flightOriginal - flightCurrent
-      : null;
+  const flightCurrent = deal.flight?.price ?? null;
+  const flightOriginal = deal.flight?.average_price ?? null;
 
-  const hotelCurrent = deal.hotel?.rate_per_night?.extracted_lowest;
+  const hotelTotalCurrent = deal.hotel?.total_rate?.extracted_lowest ?? null;
   const hotelPct = parseDealPercent(deal.hotel?.deal);
-  const hotelOriginal =
-    hotelCurrent != null && hotelPct != null && hotelPct > 0 && hotelPct < 100
-      ? hotelCurrent / (1 - hotelPct / 100)
+  const hotelTotalOriginal =
+    hotelTotalCurrent != null && hotelPct != null && hotelPct > 0 && hotelPct < 100
+      ? hotelTotalCurrent / (1 - hotelPct / 100)
       : null;
-  const hotelNightlySavings =
-    hotelOriginal != null && hotelCurrent != null ? hotelOriginal - hotelCurrent : null;
 
   const nights = nightsBetween(deal.start_date, deal.end_date);
-  const hotelTotalSavings =
-    hotelNightlySavings != null && nights != null ? hotelNightlySavings * nights : null;
 
-  const totalSavings = (flightSavings ?? 0) + (hotelTotalSavings ?? 0);
-  const hasSavings = flightSavings != null || hotelTotalSavings != null;
+  const haveAny = flightCurrent != null || hotelTotalCurrent != null;
+  const totalCurrent = haveAny ? (flightCurrent ?? 0) + (hotelTotalCurrent ?? 0) : null;
+  const totalOriginal = haveAny
+    ? (flightOriginal ?? flightCurrent ?? 0) + (hotelTotalOriginal ?? hotelTotalCurrent ?? 0)
+    : null;
+  const totalSavings =
+    totalCurrent != null && totalOriginal != null && totalOriginal > totalCurrent
+      ? totalOriginal - totalCurrent
+      : null;
 
   return {
     flightCurrent,
     flightOriginal,
-    flightSavings,
-    hotelCurrent,
-    hotelOriginal,
+    hotelTotalCurrent,
+    hotelTotalOriginal,
     hotelPct,
-    hotelNightlySavings,
     nights,
-    hotelTotalSavings,
+    totalCurrent,
+    totalOriginal,
     totalSavings,
-    hasSavings,
+    hasSavings: totalSavings != null && totalSavings > 0,
   };
 }
 
@@ -133,6 +134,33 @@ function StarRating({ rating }: { rating?: number }) {
         </svg>
       ))}
     </span>
+  );
+}
+
+// A single before/after price line: label on the left, current price with
+// an optional strikethrough original on the right.
+function PriceLine({
+  label,
+  current,
+  original,
+  emphasize = false,
+}: {
+  label: string;
+  current: number | null;
+  original: number | null;
+  emphasize?: boolean;
+}) {
+  const showOriginal = original != null && current != null && original > current;
+  return (
+    <div className="flex items-baseline justify-between">
+      <span className={emphasize ? 'font-semibold text-gray-900' : 'text-gray-500'}>{label}</span>
+      <span className="flex items-baseline gap-1.5">
+        <span className={emphasize ? 'font-semibold text-gray-900 text-base' : 'font-medium text-gray-900'}>
+          {current != null ? formatUSD(current) : '—'}
+        </span>
+        {showOriginal && <span className="text-xs text-gray-400 line-through">{formatUSD(original!)}</span>}
+      </span>
+    </div>
   );
 }
 
@@ -303,13 +331,18 @@ export default function Home() {
                       {expired ? 'Sold out' : 'Live deal'}
                     </span>
 
-                    {/* Price tag */}
-                    {deal.flight?.price != null && (
-                      <div className="absolute top-16 right-4 z-10 bg-white rounded-lg px-3 py-1.5 shadow-md">
-                        <div className="text-[10px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">From</div>
-                        <div className="text-lg font-semibold text-gray-900 leading-none">${deal.flight.price}</div>
+                    {/* Savings badge — replaces the old "From $X" price tag */}
+                    {econ.hasSavings ? (
+                      <div className="absolute top-16 right-4 z-10 bg-green-600 rounded-lg px-3 py-1.5 shadow-md">
+                        <div className="text-[10px] text-green-50 uppercase tracking-wide leading-none mb-0.5">You save</div>
+                        <div className="text-lg font-semibold text-white leading-none">{formatUSD(econ.totalSavings!)}</div>
                       </div>
-                    )}
+                    ) : econ.totalCurrent != null ? (
+                      <div className="absolute top-16 right-4 z-10 bg-white rounded-lg px-3 py-1.5 shadow-md">
+                        <div className="text-[10px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">Total</div>
+                        <div className="text-lg font-semibold text-gray-900 leading-none">{formatUSD(econ.totalCurrent)}</div>
+                      </div>
+                    ) : null}
 
                     <div className="absolute bottom-0 left-0 right-0 p-4">
                       <h2 className="text-white text-xl font-semibold tracking-tight truncate">{deal.destination}</h2>
@@ -319,88 +352,40 @@ export default function Home() {
 
                   {/* Card content */}
                   <div className="p-5 flex-1 flex flex-col justify-between">
-                    <div className="space-y-4">
-                      {/* Flight row */}
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
-                            Flight · {deal.flight?.airline || 'Airline'}
+                    <div>
+                      <div className="flex items-center gap-3 mb-4">
+                        {hotelThumb && (
+                          <img
+                            src={hotelThumb}
+                            alt={deal.hotel?.name || 'Hotel'}
+                            className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">
+                            {deal.hotel?.name || 'Hotel area location'}
                           </p>
-                          {deal.flight?.discount_percentage ? (
-                            <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded-md">
-                              {deal.flight.discount_percentage}% off
-                            </span>
+                          {deal.hotel?.overall_rating ? (
+                            <div className="flex items-center gap-1.5">
+                              <StarRating rating={deal.hotel.overall_rating} />
+                              <span className="text-xs text-gray-400">({deal.hotel.reviews ?? 0})</span>
+                            </div>
                           ) : null}
                         </div>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className="text-lg font-semibold text-gray-900">
-                            {econ.flightCurrent != null ? formatUSD(econ.flightCurrent) : '—'}
-                          </span>
-                          {econ.flightOriginal != null && (
-                            <span className="text-sm text-gray-400 line-through">{formatUSD(econ.flightOriginal)}</span>
-                          )}
-                        </div>
-                        {econ.flightSavings != null && (
-                          <p className="text-xs text-green-600 font-medium mt-0.5">Save {formatUSD(econ.flightSavings)}</p>
-                        )}
                       </div>
 
-                      {/* Hotel row */}
-                      <div className="pt-3 border-t border-gray-100">
-                        <div className="flex items-start gap-3">
-                          {hotelThumb && (
-                            <img
-                              src={hotelThumb}
-                              alt={deal.hotel?.name || 'Hotel'}
-                              className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                            />
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-medium text-gray-800 truncate">
-                                {deal.hotel?.name || 'Hotel area location'}
-                              </p>
-                              {econ.hotelPct != null && (
-                                <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded-md flex-shrink-0">
-                                  {econ.hotelPct}% off
-                                </span>
-                              )}
-                            </div>
-                            {deal.hotel?.overall_rating ? (
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <StarRating rating={deal.hotel.overall_rating} />
-                                <span className="text-xs text-gray-400">({deal.hotel.reviews ?? 0})</span>
-                              </div>
-                            ) : null}
-                            <div className="flex items-baseline gap-2 mt-1">
-                              {econ.hotelCurrent != null && (
-                                <span className="text-sm font-semibold text-gray-900">
-                                  {formatUSD(econ.hotelCurrent)}/night
-                                </span>
-                              )}
-                              {econ.hotelOriginal != null && (
-                                <span className="text-xs text-gray-400 line-through">{formatUSD(econ.hotelOriginal)}</span>
-                              )}
-                            </div>
-                            {econ.hotelNightlySavings != null && (
-                              <p className="text-xs text-green-600 font-medium mt-0.5">
-                                Save {formatUSD(econ.hotelNightlySavings)}/night
-                              </p>
-                            )}
-                          </div>
+                      <div className="space-y-2 text-sm">
+                        <PriceLine label={`Flight · ${deal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} />
+                        <PriceLine
+                          label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
+                          current={econ.hotelTotalCurrent}
+                          original={econ.hotelTotalOriginal}
+                        />
+                        <div className="pt-2 border-t border-gray-200">
+                          <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} emphasize />
                         </div>
                       </div>
                     </div>
-
-                    {/* Total savings */}
-                    {econ.hasSavings && (
-                      <div className="mt-4 bg-green-50 border border-green-100 rounded-lg px-3 py-2 flex items-center justify-between">
-                        <span className="text-xs font-medium text-green-800">
-                          Est. total savings{econ.nights ? ` (${econ.nights}n trip)` : ''}
-                        </span>
-                        <span className="text-sm font-semibold text-green-900">{formatUSD(econ.totalSavings)}</span>
-                      </div>
-                    )}
 
                     <div className="border-t border-gray-100 pt-4 mt-4 flex justify-between items-center text-xs text-gray-400">
                       <span>Dates: {deal.start_date}</span>
@@ -453,40 +438,32 @@ export default function Home() {
             </div>
 
             <div className="p-6 space-y-6 text-sm text-gray-700 leading-relaxed">
+              {/* Price breakdown */}
               <div>
-                <h3 className="font-semibold text-gray-900 text-base mb-3">Flight &amp; hotel</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Flight</p>
-                    <p className="font-medium text-gray-900">{selectedDeal.flight?.airline}</p>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-base font-semibold text-gray-900">
-                        {econ.flightCurrent != null ? formatUSD(econ.flightCurrent) : '—'}
-                      </span>
-                      {econ.flightOriginal != null && (
-                        <span className="text-xs text-gray-400 line-through">{formatUSD(econ.flightOriginal)}</span>
-                      )}
-                    </div>
-                    {econ.flightSavings != null ? (
-                      <p className="text-xs text-green-600 font-medium mt-0.5">
-                        Save {formatUSD(econ.flightSavings)} ({selectedDeal.flight?.discount_percentage}% off)
-                      </p>
-                    ) : (
-                      <p className="text-gray-500 mt-0.5">{selectedDeal.flight?.discount_percentage}% off</p>
-                    )}
-                    {selectedDeal.flight?.flight_link && (
-                      <a
-                        href={selectedDeal.flight.flight_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 text-xs font-medium mt-1.5 inline-block hover:underline"
-                      >
-                        View flight →
-                      </a>
-                    )}
+                <h3 className="font-semibold text-gray-900 text-base mb-3">Price breakdown</h3>
+                <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2">
+                  <PriceLine label={`Flight · ${selectedDeal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} />
+                  <PriceLine
+                    label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
+                    current={econ.hotelTotalCurrent}
+                    original={econ.hotelTotalOriginal}
+                  />
+                  <div className="pt-2 border-t border-gray-200">
+                    <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} emphasize />
                   </div>
-                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Hotel</p>
+                  {econ.hasSavings && (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2 mt-1">
+                      <span className="text-xs font-medium text-green-800">You save</span>
+                      <span className="text-sm font-semibold text-green-900">{formatUSD(econ.totalSavings!)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Hotel + flight details */}
+              <div>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
                     <p className="font-medium text-gray-900 truncate">{selectedDeal.hotel?.name}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <StarRating rating={selectedDeal.hotel?.overall_rating} />
@@ -494,45 +471,35 @@ export default function Home() {
                         <span className="text-gray-400 text-xs">({selectedDeal.hotel?.reviews ?? 0})</span>
                       )}
                     </div>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      {econ.hotelCurrent != null && (
-                        <span className="text-base font-semibold text-gray-900">{formatUSD(econ.hotelCurrent)}/night</span>
-                      )}
-                      {econ.hotelOriginal != null && (
-                        <span className="text-xs text-gray-400 line-through">{formatUSD(econ.hotelOriginal)}</span>
-                      )}
-                    </div>
-                    {econ.hotelNightlySavings != null && (
-                      <p className="text-xs text-green-600 font-medium mt-0.5">
-                        Save {formatUSD(econ.hotelNightlySavings)}/night ({econ.hotelPct}% off)
-                      </p>
-                    )}
                     {selectedDeal.hotel?.deal_description && (
                       <span className="inline-block text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full mt-1.5">
                         {selectedDeal.hotel.deal_description}
                       </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0 text-xs">
+                    {selectedDeal.flight?.flight_link && (
+                      <a
+                        href={selectedDeal.flight.flight_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 font-medium hover:underline"
+                      >
+                        View flight →
+                      </a>
                     )}
                     {selectedDeal.hotel?.link && (
                       <a
                         href={selectedDeal.hotel.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 text-xs font-medium mt-1.5 block hover:underline"
+                        className="text-blue-600 font-medium hover:underline"
                       >
                         View hotel →
                       </a>
                     )}
                   </div>
                 </div>
-
-                {econ.hasSavings && (
-                  <div className="mt-3 bg-green-50 border border-green-100 rounded-lg px-3 py-2 flex items-center justify-between">
-                    <span className="text-xs font-medium text-green-800">
-                      Estimated total savings{econ.nights ? ` over ${econ.nights} nights` : ''}
-                    </span>
-                    <span className="text-sm font-semibold text-green-900">{formatUSD(econ.totalSavings)}</span>
-                  </div>
-                )}
 
                 <p className="text-gray-500 mt-3">Travel window: {selectedDeal.start_date} to {selectedDeal.end_date}</p>
 
