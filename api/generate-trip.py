@@ -2,6 +2,7 @@ import os
 import asyncio
 import json
 import re
+import time
 from datetime import date, timedelta, datetime, timezone
 from typing import TypedDict, Annotated, List, Union
 
@@ -82,18 +83,31 @@ def get_flight_deals(departure_id, outbound_date_range, travel_duration="1", cur
         "currency": currency,
         "gl": gl, "hl": hl,
     }
+    print(f"[flight-search] request departure_id={departure_id} outbound_date={outbound_date_range} travel_duration={travel_duration} currency={currency}")
+
+    start = time.monotonic()
     result = serp_client.search(params)
+    elapsed_ms = round((time.monotonic() - start) * 1000, 1)
+
+    metadata = result.get("search_metadata", {}) or {}
+    print(
+        f"[flight-search] response departure_id={departure_id} "
+        f"status={metadata.get('status')} search_id={metadata.get('id')} "
+        f"elapsed_ms={elapsed_ms}"
+    )
+
     error = result.get("error")
     if error:
-        # "Empty results" just means no deals matched this search window —
-        # that's an expected day-to-day outcome, not a real failure. Let the
-        # pipeline handle it gracefully downstream instead of 500ing.
+        # google_flights_deals_url lets you manually re-open this exact
+        # search in a browser to sanity-check whether it's really empty.
+        deals_url = metadata.get("google_flights_deals_url")
+        print(f"[flight-search] ERROR departure_id={departure_id} error={error!r} check_url={deals_url}")
         if "empty results" in str(error).lower():
-            print(f"No flight deals found for departure_id={departure_id}: {error}")
             return result
         raise RuntimeError(f"google_flights_deals failed: {error}")
-    # Return the full raw response instead of just the "deals" list, so the
-    # caller can both extract deals AND keep the untouched payload.
+
+    deals = result.get("deals", [])
+    print(f"[flight-search] departure_id={departure_id} returned {len(deals)} raw deals")
     return result
 
 def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, currency="USD", gl="us", hl="en"):
@@ -107,39 +121,69 @@ def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, curren
         "gl": gl, "hl": hl,
         "special_offers": "true",
     }
+    print(f"[hotel-search] request q='{destination} hotels' check_in={check_in_date} check_out={check_out_date} adults={adults}")
+
+    start = time.monotonic()
     result = serp_client.search(params)
+    elapsed_ms = round((time.monotonic() - start) * 1000, 1)
+
+    metadata = result.get("search_metadata", {}) or {}
+    print(
+        f"[hotel-search] response destination='{destination}' "
+        f"status={metadata.get('status')} search_id={metadata.get('id')} "
+        f"elapsed_ms={elapsed_ms}"
+    )
+
     error = result.get("error")
     if error:
+        print(f"[hotel-search] ERROR destination='{destination}' error={error!r}")
         if "empty results" in str(error).lower():
-            print(f"No hotel deals found for {destination}: {error}")
             return result
         raise RuntimeError(f"google_hotels failed: {error}")
-    # Return the full raw response instead of just "properties", same reason
-    # as get_flight_deals above.
+
+    properties = result.get("properties", [])
+    print(f"[hotel-search] destination='{destination}' returned {len(properties)} properties")
     return result
 
 def get_best_hotel_area(city, country):
     prompt = f"What is the single most popular tourist destination/area for hotels in or near {city}, {country}? Reply with just the destination name."
     result = structured_llm.invoke(prompt)
+    print(f"[hotel-area] {city}, {country} -> {result.destination}")
     return result.destination
 
 def hotel_discount_percent(hotel):
     match = re.search(r"(\d+)%", hotel.get("deal", ""))
     return int(match.group(1)) if match else 0
 
-def pick_best_flight(flights, exclude):
+def pick_best_flight(flights, exclude, departure_id=None):
     """Sort by discount and return the first deal with valid dates whose
-    country isn't in the excluded set. None if nothing qualifies."""
-    deals_by_discount = sorted(flights, key=lambda d: d.get("discount_percentage", 0), reverse=True)
-    return next(
-        (
-            f for f in deals_by_discount
-            if f.get("outbound_date")
-            and f.get("return_date")
-            and f.get("country", "").strip().lower() not in exclude
-        ),
-        None,
+    country isn't in the excluded set. Logs a breakdown of why deals were
+    dropped (missing dates vs. excluded country) so filtering behavior is
+    visible, not just the final outcome."""
+    total = len(flights)
+    missing_dates = [f for f in flights if not (f.get("outbound_date") and f.get("return_date"))]
+    valid_dated = [f for f in flights if f.get("outbound_date") and f.get("return_date")]
+    excluded = [f for f in valid_dated if f.get("country", "").strip().lower() in exclude]
+    eligible = [f for f in valid_dated if f.get("country", "").strip().lower() not in exclude]
+
+    print(
+        f"[pick-flight] departure_id={departure_id} total={total} "
+        f"missing_dates={len(missing_dates)} excluded_by_country={len(excluded)} "
+        f"eligible={len(eligible)} exclude_set={sorted(exclude) if exclude else []}"
     )
+    if excluded:
+        excluded_countries = sorted({f.get('country') for f in excluded})
+        print(f"[pick-flight] departure_id={departure_id} excluded countries this batch: {excluded_countries}")
+
+    deals_by_discount = sorted(eligible, key=lambda d: d.get("discount_percentage", 0), reverse=True)
+    best = deals_by_discount[0] if deals_by_discount else None
+    if best:
+        print(
+            f"[pick-flight] departure_id={departure_id} SELECTED "
+            f"{best.get('name')}, {best.get('country')} "
+            f"(${best.get('price')}, {best.get('discount_percentage')}% off)"
+        )
+    return best
 
 @tool
 def web_search(query: str) -> str:
@@ -179,6 +223,7 @@ async def node_trip_deals(state: TravelPlanState):
     departure_ids_to_try = [state["departure_id"]] + [
         d for d in DEPARTURE_FALLBACKS if d != state["departure_id"]
     ]
+    print(f"[trip-deals] starting run: fallback_chain={departure_ids_to_try} exclude_destinations={state.get('exclude_destinations')}")
 
     best_flight = None
     raw_flight_response = None
@@ -186,12 +231,13 @@ async def node_trip_deals(state: TravelPlanState):
     for departure_id in departure_ids_to_try:
         raw_flight_response = get_flight_deals(departure_id, dates, travel_duration=state["duration"])
         flights = raw_flight_response.get("deals", [])
-        best_flight = pick_best_flight(flights, exclude)
+        best_flight = pick_best_flight(flights, exclude, departure_id=departure_id)
         if best_flight:
             break
-        print(f"No usable flight deals from {departure_id}, trying next fallback airport...")
+        print(f"[trip-deals] no eligible flight from {departure_id}, trying next fallback airport...")
 
     if not best_flight:
+        print(f"[trip-deals] FINAL: no deal found across {departure_ids_to_try}")
         # Keep the last raw flight response even on a "no deal found" run —
         # useful for debugging why nothing matched across all fallbacks.
         return {"destination": None, "raw_flight_response": raw_flight_response}
@@ -203,6 +249,7 @@ async def node_trip_deals(state: TravelPlanState):
     raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
     hotels = raw_hotel_response.get("properties", [])
     best_hotel = max(hotels, key=hotel_discount_percent) if hotels else None
+    print(f"[trip-deals] FINAL: {city}, {country} | hotel={'yes' if best_hotel else 'none found'}")
     
     return {
         "flight": best_flight,
@@ -314,6 +361,7 @@ async def generate_trip(
         "home_currency": home_currency,
         "exclude_destinations": [c for c in exclude_destinations.split(",") if c.strip()],
     }
+    print(f"[generate-trip] request received: {inputs}")
     
     try:
         final_state = await graph.ainvoke(inputs)
@@ -323,4 +371,5 @@ async def generate_trip(
         
         return final_state
     except Exception as e:
+        print(f"[generate-trip] EXCEPTION: {e!r}")
         raise HTTPException(status_code=500, detail=str(e))
