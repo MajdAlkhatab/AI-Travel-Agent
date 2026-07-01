@@ -8,6 +8,7 @@ interface Flight {
   price?: number;
   average_price?: number;
   discount_percentage?: number;
+  departure_airport_code?: string;
   arrival_airport_code?: string;
   thumbnail?: string;
   description?: string;
@@ -52,12 +53,24 @@ interface TravelDeal {
   currency_summary: string;
   final_itinerary: string;
   created_at: string; // ISO timestamp
+  travelers?: number;
 }
 
 // --- Pricing helpers ---------------------------------------------------
 
-function formatUSD(n: number): string {
-  return `$${Math.round(n).toLocaleString()}`;
+// Static approximate exchange rates (Base: USD)
+const EXCHANGE_RATES: Record<string, number> = { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
+const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', SEK: 'kr', EUR: '€', GBP: '£' };
+
+function formatPrice(n: number, currency: string): string {
+  const rate = EXCHANGE_RATES[currency] || 1;
+  const converted = n * rate;
+  const symbol = CURRENCY_SYMBOLS[currency] || '$';
+  
+  if (currency === 'SEK') {
+    return `${Math.round(converted).toLocaleString()} ${symbol}`;
+  }
+  return `${symbol}${Math.round(converted).toLocaleString()}`;
 }
 
 // Extracts "26" from a hotel deal string like "26% less than usual".
@@ -75,14 +88,6 @@ function nightsBetween(start?: string, end?: string): number | null {
   return Math.round((e - s) / (1000 * 60 * 60 * 24));
 }
 
-// Simple before/after economics for a deal: flight price, hotel TOTAL price
-// for the whole stay (not per-night), and a combined total — each with a
-// current and an original figure where available.
-//
-// Flight original comes straight from SerpApi (average_price). Hotels only
-// give us a discount percentage in text (e.g. "26% less than usual"), so
-// the original total is back-calculated from that — an estimate, not a
-// directly-reported figure.
 function getDealEconomics(deal: TravelDeal) {
   const flightCurrent = deal.flight?.price ?? null;
   const flightOriginal = deal.flight?.average_price ?? null;
@@ -125,7 +130,6 @@ function getDealEconomics(deal: TravelDeal) {
 
 // --- UI components -------------------------------------------------------
 
-// Small inline star rating — no icon library required.
 function StarRating({ rating }: { rating?: number }) {
   if (!rating) return null;
   const filled = Math.round(rating);
@@ -140,17 +144,17 @@ function StarRating({ rating }: { rating?: number }) {
   );
 }
 
-// A single before/after price line: label on the left, current price with
-// an optional strikethrough original on the right.
 function PriceLine({
   label,
   current,
   original,
+  currency,
   emphasize = false,
 }: {
   label: string;
   current: number | null;
   original: number | null;
+  currency: string;
   emphasize?: boolean;
 }) {
   const showOriginal = original != null && current != null && original > current;
@@ -159,17 +163,14 @@ function PriceLine({
       <span className={emphasize ? 'font-semibold text-gray-900' : 'text-gray-500'}>{label}</span>
       <span className="flex items-baseline gap-1.5">
         <span className={emphasize ? 'font-semibold text-gray-900 text-base' : 'font-medium text-gray-900'}>
-          {current != null ? formatUSD(current) : '—'}
+          {current != null ? formatPrice(current, currency) : '—'}
         </span>
-        {showOriginal && <span className="text-xs text-gray-400 line-through">{formatUSD(original!)}</span>}
+        {showOriginal && <span className="text-xs text-gray-400 line-through">{formatPrice(original!, currency)}</span>}
       </span>
     </div>
   );
 }
 
-// Lightweight renderer for the LLM-written summaries: turns **bold** into
-// <strong> and "- item" / "1. item" lines into real lists, without pulling
-// in a markdown dependency.
 function FormattedText({ text }: { text: string }) {
   if (!text) return null;
 
@@ -226,6 +227,7 @@ export default function Home() {
   const [triggeringAgent, setTriggeringAgent] = useState(false);
   const [now, setNow] = useState(new Date());
   const [showTriggerForm, setShowTriggerForm] = useState(false);
+  const [displayCurrency, setDisplayCurrency] = useState('USD');
   const [triggerParams, setTriggerParams] = useState({
     departureId: 'CPH',
     travelers: 2,
@@ -233,13 +235,11 @@ export default function Home() {
     homeCurrency: 'SEK',
   });
 
-  // Update current time every 10 seconds to keep timers fresh
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 10000);
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch saved deals from Vercel Blob on page load
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -282,7 +282,6 @@ export default function Home() {
     }
   };
 
-  // Helper to determine if a deal is expired (older than 1 hour)
   const isExpired = (createdAtString: string) => {
     if (!createdAtString) return false;
     const createdTime = new Date(createdAtString).getTime();
@@ -298,13 +297,25 @@ export default function Home() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">AI Travel Agent Dashboard</h1>
           <p className="text-gray-500 mt-1 text-sm">Automated pipeline updates at 09:00, 12:00, 15:00, and 18:00</p>
         </div>
-        <button
-          onClick={() => setShowTriggerForm(true)}
-          disabled={triggeringAgent}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:bg-blue-400"
-        >
-          {triggeringAgent ? 'Running Agents...' : 'Trigger Agents Manually'}
-        </button>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <select
+            value={displayCurrency}
+            onChange={(e) => setDisplayCurrency(e.target.value)}
+            className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="USD">USD ($)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="GBP">GBP (£)</option>
+            <option value="SEK">SEK (kr)</option>
+          </select>
+          <button
+            onClick={() => setShowTriggerForm(true)}
+            disabled={triggeringAgent}
+            className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:bg-blue-400"
+          >
+            {triggeringAgent ? 'Running...' : 'Trigger Agents'}
+          </button>
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -316,7 +327,6 @@ export default function Home() {
             <p className="text-gray-500">No deals generated yet. Click the button above to run your agents for the first time!</p>
           </div>
         ) : (
-          /* 3-Column Grid Layout */
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {deals.map((deal, idx) => {
               const expired = isExpired(deal.created_at);
@@ -329,7 +339,6 @@ export default function Home() {
                   onClick={() => setSelectedDeal(deal)}
                   className="group bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-lg transition-shadow cursor-pointer relative flex flex-col h-full"
                 >
-                  {/* Hero photo */}
                   <div className="relative h-44 overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900">
                     {heroImage && (
                       <img
@@ -340,7 +349,6 @@ export default function Home() {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
-                    {/* Expiry badge */}
                     <span
                       className={`absolute top-4 right-4 z-10 text-xs font-medium px-2.5 py-1 rounded-full uppercase tracking-wide backdrop-blur-sm ${
                         expired ? 'bg-white/90 text-red-700' : 'bg-white/90 text-green-700'
@@ -349,12 +357,11 @@ export default function Home() {
                       {expired ? 'Sold out' : 'Live deal'}
                     </span>
 
-                    {/* Savings badge — replaces the old "From $X" price tag */}
                     {econ.hasSavings ? (
                       <div className="absolute top-16 right-4 z-10 bg-green-600 rounded-lg px-3 py-1.5 shadow-md">
                         <div className="text-[10px] text-green-50 uppercase tracking-wide leading-none mb-0.5">You save</div>
                         <div className="text-lg font-semibold text-white leading-none">
-                          {formatUSD(econ.totalSavings!)}
+                          {formatPrice(econ.totalSavings!, displayCurrency)}
                           {econ.totalSavingsPercent != null && (
                             <span className="text-xs font-medium text-green-100 ml-1">({econ.totalSavingsPercent}%)</span>
                           )}
@@ -363,7 +370,7 @@ export default function Home() {
                     ) : econ.totalCurrent != null ? (
                       <div className="absolute top-16 right-4 z-10 bg-white rounded-lg px-3 py-1.5 shadow-md">
                         <div className="text-[10px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">Total</div>
-                        <div className="text-lg font-semibold text-gray-900 leading-none">{formatUSD(econ.totalCurrent)}</div>
+                        <div className="text-lg font-semibold text-gray-900 leading-none">{formatPrice(econ.totalCurrent, displayCurrency)}</div>
                       </div>
                     ) : null}
 
@@ -373,7 +380,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Card content */}
                   <div className="p-5 flex-1 flex flex-col justify-between">
                     <div>
                       <div className="flex items-center gap-3 mb-4">
@@ -398,21 +404,32 @@ export default function Home() {
                       </div>
 
                       <div className="space-y-2 text-sm">
-                        <PriceLine label={`Flight · ${deal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} />
+                        <PriceLine label={`Flight · ${deal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} />
                         <PriceLine
                           label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
                           current={econ.hotelTotalCurrent}
                           original={econ.hotelTotalOriginal}
+                          currency={displayCurrency}
                         />
                         <div className="pt-2 border-t border-gray-200">
-                          <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} emphasize />
+                          <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} emphasize />
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-gray-100 pt-4 mt-4 flex justify-between items-center text-xs text-gray-400">
-                      <span>Dates: {deal.start_date} - {deal.end_date}</span>
-                      <span>Generated: {new Date(deal.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <div className="border-t border-gray-100 pt-4 mt-4 flex flex-col gap-2 text-xs text-gray-400">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-md">
+                          ✈️ {deal.flight?.departure_airport_code || 'Origin'} → {deal.flight?.arrival_airport_code || deal.destination.substring(0,3).toUpperCase()}
+                        </span>
+                        <span className="font-medium text-gray-600">
+                          👥 {deal.travelers || 2} Persons
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mt-1">
+                        <span>Dates: {deal.start_date} - {deal.end_date}</span>
+                        <span>Gen: {new Date(deal.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -422,7 +439,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Trigger Parameters Form */}
       {showTriggerForm && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
@@ -521,7 +537,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Expanded Detailed Itinerary Modal */}
       {selectedDeal && (() => {
         const econ = getDealEconomics(selectedDeal);
         return (
@@ -533,7 +548,6 @@ export default function Home() {
             className="bg-white rounded-2xl max-w-2xl w-full max-h-[88vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Hero */}
             <div className="relative h-56 flex-shrink-0">
               {selectedDeal.flight?.thumbnail ? (
                 <img
@@ -560,24 +574,24 @@ export default function Home() {
             </div>
 
             <div className="p-6 space-y-6 text-sm text-gray-700 leading-relaxed">
-              {/* Price breakdown */}
               <div>
                 <h3 className="font-semibold text-gray-900 text-base mb-3">Price breakdown</h3>
                 <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2">
-                  <PriceLine label={`Flight · ${selectedDeal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} />
+                  <PriceLine label={`Flight · ${selectedDeal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} />
                   <PriceLine
                     label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
                     current={econ.hotelTotalCurrent}
                     original={econ.hotelTotalOriginal}
+                    currency={displayCurrency}
                   />
                   <div className="pt-2 border-t border-gray-200">
-                    <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} emphasize />
+                    <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} emphasize />
                   </div>
                   {econ.hasSavings && (
                     <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2 mt-1">
                       <span className="text-xs font-medium text-green-800">You save</span>
                       <span className="text-sm font-semibold text-green-900">
-                        {formatUSD(econ.totalSavings!)}
+                        {formatPrice(econ.totalSavings!, displayCurrency)}
                         {econ.totalSavingsPercent != null && (
                           <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>
                         )}
@@ -587,7 +601,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Hotel + flight details */}
               <div>
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -628,9 +641,10 @@ export default function Home() {
                   </div>
                 </div>
 
-                <p className="text-gray-500 mt-3">Travel window: {selectedDeal.start_date} to {selectedDeal.end_date}</p>
+                <p className="text-gray-500 mt-3">
+                  Travel window: {selectedDeal.start_date} to {selectedDeal.end_date} • 👥 {selectedDeal.travelers || 2} Persons • ✈️ {selectedDeal.flight?.departure_airport_code || 'Origin'} → {selectedDeal.flight?.arrival_airport_code || 'Dest'}
+                </p>
 
-                {/* Hotel photo strip */}
                 {selectedDeal.hotel?.images && selectedDeal.hotel.images.length > 0 && (
                   <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
                     {selectedDeal.hotel.images.slice(0, 4).map((img, i) => (
@@ -644,7 +658,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Amenities */}
                 {selectedDeal.hotel?.amenities && selectedDeal.hotel.amenities.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-3">
                     {selectedDeal.hotel.amenities.map((a, i) => (
