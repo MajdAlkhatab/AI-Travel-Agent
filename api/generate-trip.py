@@ -191,17 +191,17 @@ def web_search(query: str) -> str:
     return str(tavily.search(query))
 
 # EXECUTORS
-taxi_executor = create_agent(model="gpt-4o-mini", tools=[web_search], system_prompt="You are a taxi expert. Search for the exact taxi fare price and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
-bus_executor = create_agent(model="gpt-4o-mini", tools=[web_search], system_prompt="You are a public transport expert. Search for the bus/train ticket price and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
-app_executor = create_agent(model="gpt-4o-mini", tools=[web_search], system_prompt="You are a ride-hailing expert. Search for Uber/Bolt fare prices and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
-transport_main_agent = create_agent(model="gpt-4o-mini", tools=[], system_prompt="Compare the Taxi, Bus, and App choices. Output an ultra-short comparative list of prices and durations, followed by a final choice.")
+taxi_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a taxi expert. Search for the exact taxi fare price and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+bus_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a public transport expert. Search for the bus/train ticket price and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+app_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a ride-hailing expert. Search for Uber/Bolt fare prices and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+transport_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Compare the Taxi, Bus, and App choices. Output a clean, simple bulleted list with NO introductory text like 'Comparison:'. Format exactly like this:\n- **Taxi**: [Price] ([Duration])\n- **Bus**: [Price] ([Duration])\n- **Uber/Bolt**: [Price] ([Duration])\n\n**Final Choice**: [Your short recommendation].")
 
-weather_executor = create_agent(model="gpt-4o-mini", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer.")
-activities_executor = create_agent(model="gpt-4o-mini", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer.")
-culture_executor = create_agent(model="gpt-4o-mini", tools=[], system_prompt="Give 2-3 short cultural tips for visiting.")
-activity_main_agent = create_agent(model="gpt-4o-mini", tools=[], system_prompt="Summarize Weather, Activities, and Culture cleanly and concisely.")
+weather_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer.")
+activities_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer.")
+culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="Give 2-3 short cultural tips for visiting.")
+activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize Weather, Activities, and Culture cleanly and concisely. Use bold text for categories (e.g., **Weather:**, **Activities:**, **Culture:**) and use flat bullet points. Do NOT use nested bullets or multi-level lists.")
 
-tavily_currency_executor = create_agent(model="gpt-4o-mini", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer.")
+tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer.")
 
 _frankfurter_executor = None
 async def get_frankfurter_executor():
@@ -209,7 +209,7 @@ async def get_frankfurter_executor():
     if _frankfurter_executor is None:
         client = MultiServerMCPClient({"frankfurter": {"transport": "streamable_http", "url": "https://mcp.frankfurter.dev/"}})
         tools = await client.get_tools()
-        _frankfurter_executor = create_agent(model="gpt-4o-mini", tools=tools, system_prompt="Use get_rates to find exchange rate. Return short answer.")
+        _frankfurter_executor = create_agent(model="gpt-5-nano", tools=tools, system_prompt="Use get_rates to find exchange rate. Return short answer.")
     return _frankfurter_executor
 
 # --- 4. LANGGRAPH NODES ---
@@ -266,25 +266,25 @@ async def node_trip_deals(state: TravelPlanState):
 async def node_transport(state: TravelPlanState):
     hotel_name = state['hotel'].get('name', state['hotel_area']) if state.get('hotel') else state['hotel_area']
     loc = f"{hotel_name}, {state['destination']}"
-    query = f"Airport: {state['flight']['arrival_airport_code']}\nDates: {state['start_date']}-{state['end_date']}\nHotel: {loc}"
+    query = f"Airport: {state['flight']['arrival_airport_code']}\nDates: {state['start_date']}-{state['end_date']}\nHotel: {loc}\nCRITICAL: Convert and state all prices in {state['home_currency']}."
     
     t_res, b_res, a_res = await asyncio.gather(
         taxi_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         bus_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         app_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
     )
-    summary = f"Taxi: {t_res['messages'][-1].content}\nBus: {b_res['messages'][-1].content}\nApp: {a_res['messages'][-1].content}"
+    summary = f"Taxi: {t_res['messages'][-1].content}\nBus: {b_res['messages'][-1].content}\nApp: {a_res['messages'][-1].content}\nCRITICAL: Format all final output prices in {state['home_currency']}."
     final = await transport_main_agent.ainvoke({"messages": [HumanMessage(content=summary)]})
     return {"transport_summary": final["messages"][-1].content}
 
 async def node_activities(state: TravelPlanState):
-    query = f"Destination: {state['destination']}, {state['country']}\nDates: {state['start_date']} to {state['end_date']}"
+    query = f"Destination: {state['destination']}, {state['country']}\nDates: {state['start_date']} to {state['end_date']}\nCRITICAL: Convert and state all prices in {state['home_currency']}."
     w_res, a_res, c_res = await asyncio.gather(
         weather_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         activities_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         culture_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
     )
-    summary = f"Weather: {w_res['messages'][-1].content}\nActs: {a_res['messages'][-1].content}\nCulture: {c_res['messages'][-1].content}"
+    summary = f"Weather: {w_res['messages'][-1].content}\nActs: {a_res['messages'][-1].content}\nCulture: {c_res['messages'][-1].content}\nCRITICAL: Format any prices mentioned in {state['home_currency']}."
     final = await activity_main_agent.ainvoke({"messages": [HumanMessage(content=summary)]})
     return {"activity_summary": final["messages"][-1].content}
 
@@ -303,10 +303,13 @@ async def node_currency(state: TravelPlanState):
 
 async def node_synthesize(state: TravelPlanState):
     prompt = f"""
-    You are a professional travel agent. Provide ONLY a punchy, day-by-day itinerary for the trip. Use bullet points.
+    You are a professional travel agent. Provide ONLY a punchy, day-by-day itinerary for the trip. 
     
-    CRITICAL INSTRUCTION: DO NOT summarize or mention the flight details, hotel names, prices, weather forecasts, or currency exchange rates in this output. The frontend UI already handles those details. Your output should strictly be the daily schedule of activities.
-
+    CRITICAL INSTRUCTIONS: 
+    1. DO NOT summarize or mention the flight details, hotel names, prices, weather forecasts, or currency exchange rates in this output. 
+    2. Format each day as a distinct Markdown header (e.g., ### Day 1 - Aug 20).
+    3. Under each day header, use simple bullet points for Morning, Afternoon, and Evening activities.
+    
     Destination: {state['destination']}, {state['country']} ({state['start_date']} to {state['end_date']})
     Transport Context: {state['transport_summary']}
     Activities/Culture Context: {state['activity_summary']}

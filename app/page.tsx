@@ -224,7 +224,7 @@ function FormattedText({ text }: { text: string }) {
 export default function Home() {
   const [deals, setDeals] = useState<TravelDeal[]>([]);
   const [selectedDeal, setSelectedDeal] = useState<TravelDeal | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'itinerary' | 'guide'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'daily_plan' | 'guide'>('overview');
   const [loading, setLoading] = useState(true);
   const [triggeringAgent, setTriggeringAgent] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -591,10 +591,10 @@ export default function Home() {
                 Overview
               </button>
               <button 
-                onClick={() => setActiveTab('itinerary')} 
-                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'itinerary' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                onClick={() => setActiveTab('daily_plan')} 
+                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
               >
-                Itinerary
+                Daily Plan
               </button>
               <button 
                 onClick={() => setActiveTab('guide')} 
@@ -717,8 +717,8 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Tab 2: Itinerary */}
-              {activeTab === 'itinerary' && (
+              {/* Tab 2: Daily Plan */}
+              {activeTab === 'daily_plan' && (
                 <div className="bg-indigo-50/30 p-5 rounded-xl border border-indigo-100">
                   <h3 className="font-semibold text-indigo-950 text-base mb-2">Suggested Daily Schedule</h3>
                   <FormattedText text={selectedDeal.final_itinerary} />
