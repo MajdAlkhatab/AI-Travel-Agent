@@ -199,9 +199,9 @@ transport_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt=
 weather_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer.")
 activities_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer.")
 culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="Give 2-3 short cultural tips for visiting.")
-activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize Weather, Activities, and Culture cleanly and concisely. Use bold text for categories (e.g., **Weather:**, **Activities:**, **Culture:**) and use flat bullet points. Do NOT use nested bullets or multi-level lists.")
+activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination. Use exactly three Markdown headers: '### 🌤️ Weather', '### 🎯 Top Activities', and '### 🏛️ Culture & Etiquette'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (6 short, punchy bullet points) . CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs. answer in short and clean way")
 
-tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer.")
+tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer.") # 
 
 _frankfurter_executor = None
 async def get_frankfurter_executor():
