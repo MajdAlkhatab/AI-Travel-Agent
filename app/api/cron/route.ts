@@ -3,6 +3,16 @@ import { put, list } from '@vercel/blob';
 
 export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    // Falls back to the same defaults the scheduled cron run has always
+    // used, so calls with no params (the cron schedule itself) behave
+    // exactly as before. Manual triggers from the dashboard can override any
+    // of these.
+    const departureId = searchParams.get('departure_id') || 'CPH';
+    const travelers = searchParams.get('travelers') || '2';
+    const duration = searchParams.get('duration') || '2';
+    const homeCurrency = searchParams.get('home_currency') || 'SEK';
+
     // 1. Fetch existing deals FIRST, so we know which countries to avoid
     // repeating before calling the Python agents.
     let existingDeals: any[] = [];
@@ -25,12 +35,16 @@ export async function GET(request: Request) {
       )
     );
 
-    // 2. Call your Python AI Agents, passing the exclusion list along
+    // 2. Call your Python AI Agents, passing the params and exclusion list along
     const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
     const host = request.headers.get('host');
-    const pythonApiUrl = `${protocol}://${host}/api/generate-trip?exclude_destinations=${encodeURIComponent(
-      recentCountries.join(',')
-    )}`;
+    const pythonApiUrl = `${protocol}://${host}/api/generate-trip?${new URLSearchParams({
+      departure_id: departureId,
+      travelers,
+      duration,
+      home_currency: homeCurrency,
+      exclude_destinations: recentCountries.join(','),
+    }).toString()}`;
 
     console.log("Triggering Python Agents at:", pythonApiUrl);
     const agentResponse = await fetch(pythonApiUrl, { cache: 'no-store' });

@@ -225,6 +225,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [triggeringAgent, setTriggeringAgent] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [showTriggerForm, setShowTriggerForm] = useState(false);
+  const [triggerParams, setTriggerParams] = useState({
+    departureId: 'CPH',
+    travelers: 2,
+    duration: '2',
+    homeCurrency: 'SEK',
+  });
 
   // Update current time every 10 seconds to keep timers fresh
   useEffect(() => {
@@ -250,10 +257,18 @@ export default function Home() {
     loadData();
   }, []);
 
-  const triggerManualRun = async () => {
+  const triggerManualRun = async (params?: typeof triggerParams) => {
     setTriggeringAgent(true);
     try {
-      const res = await fetch('/api/cron');
+      const query = params
+        ? `?${new URLSearchParams({
+            departure_id: params.departureId,
+            travelers: String(params.travelers),
+            duration: params.duration,
+            home_currency: params.homeCurrency,
+          }).toString()}`
+        : '';
+      const res = await fetch(`/api/cron${query}`);
       const data = await res.json();
       if (data.success) {
         window.location.reload();
@@ -284,7 +299,7 @@ export default function Home() {
           <p className="text-gray-500 mt-1 text-sm">Automated pipeline updates at 09:00, 12:00, 15:00, and 18:00</p>
         </div>
         <button
-          onClick={triggerManualRun}
+          onClick={() => setShowTriggerForm(true)}
           disabled={triggeringAgent}
           className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:bg-blue-400"
         >
@@ -406,6 +421,104 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Trigger Parameters Form */}
+      {showTriggerForm && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          onClick={() => setShowTriggerForm(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-100 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Run agents</h2>
+              <button
+                onClick={() => setShowTriggerForm(false)}
+                className="text-gray-400 hover:text-gray-600 font-semibold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                  Departure airport
+                </label>
+                <select
+                  value={triggerParams.departureId}
+                  onChange={(e) => setTriggerParams({ ...triggerParams, departureId: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
+                >
+                  <option value="CPH">Copenhagen (CPH)</option>
+                  <option value="ARN">Stockholm Arlanda (ARN)</option>
+                  <option value="GOT">Göteborg Landvetter (GOT)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                    Travelers
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={triggerParams.travelers}
+                    onChange={(e) =>
+                      setTriggerParams({ ...triggerParams, travelers: Number(e.target.value) || 1 })
+                    }
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                    Trip length (days)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={14}
+                    value={triggerParams.duration}
+                    onChange={(e) => setTriggerParams({ ...triggerParams, duration: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                  Home currency
+                </label>
+                <select
+                  value={triggerParams.homeCurrency}
+                  onChange={(e) => setTriggerParams({ ...triggerParams, homeCurrency: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
+                >
+                  <option value="SEK">SEK</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowTriggerForm(false);
+                triggerManualRun(triggerParams);
+              }}
+              disabled={triggeringAgent}
+              className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:bg-blue-400"
+            >
+              {triggeringAgent ? 'Running...' : 'Run agents'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Expanded Detailed Itinerary Modal */}
       {selectedDeal && (() => {
