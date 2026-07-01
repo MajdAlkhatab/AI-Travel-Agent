@@ -179,7 +179,7 @@ function FormattedText({ text }: { text: string }) {
     const parts = line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
     return parts.map((part, i) =>
       part.startsWith('**') && part.endsWith('**') ? (
-        <strong key={i} className="font-medium text-gray-900">{part.slice(2, -2)}</strong>
+        <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>
       ) : (
         <span key={i}>{part}</span>
       )
@@ -193,7 +193,7 @@ function FormattedText({ text }: { text: string }) {
   const flushList = () => {
     if (listBuffer.length === 0) return;
     blocks.push(
-      <ul key={`ul-${blocks.length}`} className="list-disc pl-5 space-y-1 my-2">
+      <ul key={`ul-${blocks.length}`} className="list-disc pl-5 space-y-1.5 my-2">
         {listBuffer.map((item, i) => (
           <li key={i} className="text-gray-600">{renderInline(item)}</li>
         ))}
@@ -205,14 +205,25 @@ function FormattedText({ text }: { text: string }) {
   lines.forEach((line, idx) => {
     const bulletMatch = line.match(/^[-*]\s+(.*)/);
     const numberedMatch = line.match(/^\d+\.\s+(.*)/);
-    if (bulletMatch) {
+    const headerMatch = line.match(/^(#{1,3})\s+(.*)/); // Detects Markdown headers (##, ###)
+
+    if (headerMatch) {
+      flushList();
+      const content = headerMatch[2];
+      // Render as a bold header with proper spacing
+      blocks.push(
+        <h3 key={`h-${idx}`} className="font-semibold text-indigo-950 text-sm mt-5 mb-2">
+          {renderInline(content)}
+        </h3>
+      );
+    } else if (bulletMatch) {
       listBuffer.push(bulletMatch[1]);
     } else if (numberedMatch) {
       listBuffer.push(numberedMatch[1]);
     } else {
       flushList();
       blocks.push(
-        <p key={`p-${idx}`} className="text-gray-600 my-1">{renderInline(line)}</p>
+        <p key={`p-${idx}`} className="text-gray-600 my-1.5">{renderInline(line)}</p>
       );
     }
   });
@@ -220,6 +231,7 @@ function FormattedText({ text }: { text: string }) {
 
   return <div>{blocks}</div>;
 }
+
 
 export default function Home() {
   const [deals, setDeals] = useState<TravelDeal[]>([]);
