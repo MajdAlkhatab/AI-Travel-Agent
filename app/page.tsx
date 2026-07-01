@@ -105,6 +105,8 @@ function getDealEconomics(deal: TravelDeal) {
     totalCurrent != null && totalOriginal != null && totalOriginal > totalCurrent
       ? totalOriginal - totalCurrent
       : null;
+  const totalSavingsPercent =
+    totalSavings != null && totalOriginal ? Math.round((totalSavings / totalOriginal) * 100) : null;
 
   return {
     flightCurrent,
@@ -116,6 +118,7 @@ function getDealEconomics(deal: TravelDeal) {
     totalCurrent,
     totalOriginal,
     totalSavings,
+    totalSavingsPercent,
     hasSavings: totalSavings != null && totalSavings > 0,
   };
 }
@@ -335,7 +338,12 @@ export default function Home() {
                     {econ.hasSavings ? (
                       <div className="absolute top-16 right-4 z-10 bg-green-600 rounded-lg px-3 py-1.5 shadow-md">
                         <div className="text-[10px] text-green-50 uppercase tracking-wide leading-none mb-0.5">You save</div>
-                        <div className="text-lg font-semibold text-white leading-none">{formatUSD(econ.totalSavings!)}</div>
+                        <div className="text-lg font-semibold text-white leading-none">
+                          {formatUSD(econ.totalSavings!)}
+                          {econ.totalSavingsPercent != null && (
+                            <span className="text-xs font-medium text-green-100 ml-1">({econ.totalSavingsPercent}%)</span>
+                          )}
+                        </div>
                       </div>
                     ) : econ.totalCurrent != null ? (
                       <div className="absolute top-16 right-4 z-10 bg-white rounded-lg px-3 py-1.5 shadow-md">
@@ -454,7 +462,12 @@ export default function Home() {
                   {econ.hasSavings && (
                     <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2 mt-1">
                       <span className="text-xs font-medium text-green-800">You save</span>
-                      <span className="text-sm font-semibold text-green-900">{formatUSD(econ.totalSavings!)}</span>
+                      <span className="text-sm font-semibold text-green-900">
+                        {formatUSD(econ.totalSavings!)}
+                        {econ.totalSavingsPercent != null && (
+                          <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>
+                        )}
+                      </span>
                     </div>
                   )}
                 </div>
