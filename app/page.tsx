@@ -476,16 +476,17 @@ export default function Home() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                    Trip length (days)
+                    Trip duration
                   </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={14}
+                  <select
                     value={triggerParams.duration}
                     onChange={(e) => setTriggerParams({ ...triggerParams, duration: e.target.value })}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
-                  />
+                  >
+                    <option value="2">Weekend</option>
+                    <option value="1">1 Week</option>
+                    <option value="3">2 Weeks</option>
+                  </select>
                 </div>
               </div>
 
