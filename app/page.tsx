@@ -1026,7 +1026,7 @@ export default function Home() {
 
                     <div className="flex gap-3 mt-4">
                       {selectedDeal.flight?.flight_link && (
-                        
+                        <a
                           href={selectedDeal.flight.flight_link}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1037,7 +1037,7 @@ export default function Home() {
                       )}
                       
                       {selectedDeal.hotel?.name && (
-                        
+                        <a
                           href={selectedDeal.hotel?.link || `https://www.google.com/travel/search?q=${encodeURIComponent(`${selectedDeal.hotel.name} ${selectedDeal.destination} ${selectedDeal.country}`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
