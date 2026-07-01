@@ -373,7 +373,7 @@ export default function Home() {
                         expired ? 'bg-white/90 text-red-700' : 'bg-white/90 text-green-700'
                       }`}
                     >
-                      {expired ? 'Sold out' : 'Live deal'}
+                      {expired ? 'Archived' : 'Live deal'}
                     </span>
 
                     {econ.hasSavings ? (
