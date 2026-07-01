@@ -70,7 +70,7 @@ function formatPrice(n: number, currency: string, rates: Record<string, number>)
   const rate = rates[currency] || 1;
   const converted = n * rate;
   const symbol = CURRENCY_SYMBOLS[currency] || '$';
-
+  
   if (currency === 'SEK') {
     return `${Math.round(converted).toLocaleString()} ${symbol}`;
   }
@@ -139,7 +139,7 @@ function StarRating({ rating }: { rating?: number }) {
   return (
     <span className="inline-flex items-center gap-0.5" aria-label={`${rating} out of 5 stars`}>
       {Array.from({ length: 5 }).map((_, i) => (
-        <svg key={i} width="11" height="11" viewBox="0 0 20 20" fill={i < filled ? '#D97706' : '#E5E7EB'}>
+        <svg key={i} width="11" height="11" viewBox="0 0 20 20" fill={i < filled ? '#059669' : '#E5E7EB'}>
           <path d="M10 1l2.6 5.6 6.2.6-4.6 4.2 1.3 6.1L10 14.8 4.5 17.5l1.3-6.1L1.2 7.2l6.2-.6L10 1z" />
         </svg>
       ))}
@@ -215,7 +215,7 @@ function FormattedText({ text }: { text: string }) {
       flushList();
       const content = headerMatch[2];
       blocks.push(
-        <h3 key={`h-${idx}`} className="font-semibold text-indigo-950 text-sm mt-5 mb-2">
+        <h3 key={`h-${idx}`} className="font-semibold text-emerald-950 text-sm mt-5 mb-2">
           {renderInline(content)}
         </h3>
       );
@@ -235,18 +235,18 @@ function FormattedText({ text }: { text: string }) {
   return <div>{blocks}</div>;
 }
 
-// --- Brand ------------------------------------------------------------
+// --- Brand & Pipeline -------------------------------------------------
 
 function Logo() {
   return (
     <div className="flex items-center gap-2.5">
       <div className="relative w-9 h-9 flex items-center justify-center rounded-full bg-slate-950 flex-shrink-0">
-        <span className="absolute inset-0 rounded-full border border-amber-400 opacity-60" />
-        <Radar size={17} className="text-amber-400" strokeWidth={2.25} />
+        <span className="absolute inset-0 rounded-full border border-green-400 opacity-60" />
+        <Radar size={17} className="text-green-400" strokeWidth={2.25} />
       </div>
       <span className="text-2xl font-bold tracking-tight">
         <span className="text-slate-900">Trip</span>
-        <span className="text-amber-500">Hunter</span>
+        <span className="text-green-600">Hunter</span>
       </span>
     </div>
   );
@@ -280,13 +280,11 @@ function NextScanPill() {
   if (!label) return null;
   return (
     <div className="hidden md:flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 text-xs text-gray-500 shadow-sm">
-      <Clock size={12} className="text-amber-500" />
+      <Clock size={12} className="text-green-600" />
       Next scan {label}
     </div>
   );
 }
-
-// --- Pipeline strip (inline, horizontal, no overlay) -----------------------
 
 type Phase = 'idle' | 'received' | 'flight' | 'hotel' | 'parallel' | 'synthesize' | 'done' | 'empty' | 'error';
 type NodeStatus = 'pending' | 'active' | 'done';
@@ -307,23 +305,23 @@ function Beacon({ icon: Icon, label, status }: { icon: any; label: string; statu
     <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
       <div className="relative flex items-center justify-center">
         {status === 'active' && (
-          <span className="absolute w-[68px] h-[68px] rounded-full border-2 border-dashed border-amber-400 th-radar-ring" />
+          <span className="absolute w-[68px] h-[68px] rounded-full border-2 border-dashed border-green-400 th-radar-ring" />
         )}
         {status === 'active' && (
-          <span className="absolute inset-0 rounded-full bg-amber-500 animate-ping opacity-30" />
+          <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-30" />
         )}
         <div
           className={
             'relative w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors duration-500 ' +
             (status === 'done'
-              ? 'bg-emerald-500 border-emerald-400'
+              ? 'bg-emerald-700 border-emerald-600'
               : status === 'active'
-              ? 'bg-amber-500 border-amber-400'
+              ? 'bg-green-500 border-green-400'
               : 'bg-slate-900 border-slate-700')
           }
         >
           {status === 'done' ? (
-            <CheckCircle2 size={19} className="text-slate-950" strokeWidth={2.5} />
+            <CheckCircle2 size={19} className="text-emerald-300" strokeWidth={2.5} />
           ) : (
             <Icon size={19} className={status === 'active' ? 'text-slate-950' : 'text-slate-600'} strokeWidth={2} />
           )}
@@ -332,7 +330,7 @@ function Beacon({ icon: Icon, label, status }: { icon: any; label: string; statu
       <span
         className={
           'text-[11px] font-semibold tracking-wide whitespace-nowrap transition-colors duration-500 ' +
-          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-amber-300' : 'text-emerald-300')
+          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-green-400' : 'text-emerald-500')
         }
       >
         {label}
@@ -346,7 +344,7 @@ function HConnector({ active }: { active: boolean }) {
     <div
       className={
         'flex-1 min-w-[20px] h-0.5 mx-1.5 mb-5 rounded-full transition-colors duration-500 ' +
-        (active ? 'bg-emerald-500' : 'bg-slate-700')
+        (active ? 'bg-emerald-600' : 'bg-slate-700')
       }
     />
   );
@@ -358,11 +356,11 @@ function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; stat
       <div
         className={
           'w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-500 ' +
-          (status === 'done' ? 'bg-emerald-500' : status === 'active' ? 'bg-amber-500' : 'bg-slate-800')
+          (status === 'done' ? 'bg-emerald-700' : status === 'active' ? 'bg-green-500' : 'bg-slate-800')
         }
       >
         {status === 'done' ? (
-          <CheckCircle2 size={11} className="text-slate-950" />
+          <CheckCircle2 size={11} className="text-emerald-300" />
         ) : (
           <Icon size={11} className={status === 'active' ? 'text-slate-950' : 'text-slate-500'} />
         )}
@@ -370,22 +368,32 @@ function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; stat
       <span
         className={
           'text-[11px] font-medium whitespace-nowrap ' +
-          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-amber-300' : 'text-emerald-300')
+          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-green-400' : 'text-emerald-500')
         }
       >
         {label}
       </span>
-      {status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />}
+      {status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />}
     </div>
   );
 }
 
-function ParallelBox({ transport, activities, currency }: { transport: NodeStatus; activities: NodeStatus; currency: NodeStatus }) {
+// Updated ParallelBox to simulate a branching horizontal pipeline
+function BranchingParallelBox({ transport, activities, currency, activeOverall }: { transport: NodeStatus; activities: NodeStatus; currency: NodeStatus; activeOverall: boolean }) {
   return (
-    <div className="flex flex-col gap-1.5 border border-dashed border-slate-700 rounded-xl px-3 py-2.5 bg-slate-900/60 flex-shrink-0 mb-5">
-      <MiniRow icon={Bus} label="Transport" status={transport} />
-      <MiniRow icon={Compass} label="Activities" status={activities} />
-      <MiniRow icon={Coins} label="Currency" status={currency} />
+    <div className="flex items-stretch mx-1 py-1 mb-5 flex-shrink-0">
+      {/* Left Fork Bracket */}
+      <div className={`w-4 border-t-2 border-b-2 border-l-2 rounded-l-xl mt-3 mb-3 transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
+      
+      {/* Central Items */}
+      <div className="flex flex-col gap-2.5 px-3 py-1 bg-slate-900/40 rounded-md z-10">
+        <MiniRow icon={Bus} label="Transport" status={transport} />
+        <MiniRow icon={Compass} label="Activities" status={activities} />
+        <MiniRow icon={Coins} label="Currency" status={currency} />
+      </div>
+
+      {/* Right Fork Bracket */}
+      <div className={`w-4 border-t-2 border-b-2 border-r-2 rounded-r-xl mt-3 mb-3 transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
     </div>
   );
 }
@@ -419,10 +427,10 @@ function PipelineStrip({
 
   const consoleLine =
     phase === 'received' ? '> request received'
-    : phase === 'flight' ? '> scanning flight deals...'
-    : phase === 'hotel' ? '> found a flight — checking hotels...'
-    : phase === 'parallel' ? '> researching transport, activities, currency in parallel...'
-    : phase === 'synthesize' ? '> writing the itinerary...'
+    : phase === 'flight' ? '> scanning global flight deals...'
+    : phase === 'hotel' ? '> flight secured — evaluating hotel partners...'
+    : phase === 'parallel' ? '> researching transport, activities, and currency data...'
+    : phase === 'synthesize' ? '> compiling final itinerary...'
     : '';
 
   const mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
@@ -440,7 +448,7 @@ function PipelineStrip({
       <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <Radar size={15} className={isSettled ? 'text-slate-500' : 'text-amber-400'} />
+            <Radar size={15} className={isSettled ? 'text-slate-500' : 'text-green-400'} />
             <span className="text-slate-100 font-semibold text-sm">
               {phase === 'done' ? 'Deal found'
                 : phase === 'empty' ? 'No deal this round'
@@ -452,33 +460,36 @@ function PipelineStrip({
             <span className="text-slate-500 text-xs flex items-center gap-1 font-mono">
               <Clock size={11} /> {mm}:{ss}
             </span>
-            <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
               <X size={15} />
             </button>
           </div>
         </div>
 
-        <div className="flex items-start overflow-x-auto pb-1">
+        <div className="flex items-start overflow-x-auto pb-1 hide-scrollbar">
           <Beacon icon={Radar} label="Received" status={statusOf('received', phase)} />
           <HConnector active={statusOf('flight', phase) !== 'pending'} />
           <Beacon icon={Plane} label="Flights" status={statusOf('flight', phase)} />
           <HConnector active={statusOf('hotel', phase) !== 'pending'} />
           <Beacon icon={BedDouble} label="Hotels" status={statusOf('hotel', phase)} />
+          
           <HConnector active={parallelOverall !== 'pending'} />
-          <ParallelBox
+          <BranchingParallelBox
+            activeOverall={parallelOverall !== 'pending'}
             transport={subStatus(subDone.transport)}
             activities={subStatus(subDone.activities)}
             currency={subStatus(subDone.currency)}
           />
           <HConnector active={statusOf('synthesize', phase) !== 'pending'} />
+          
           <Beacon icon={Sparkles} label="Itinerary" status={statusOf('synthesize', phase)} />
         </div>
 
         {!isSettled && (
           <div className="bg-black/40 border border-slate-800 rounded-lg px-4 py-2 mt-1">
-            <p className="text-emerald-400 text-xs font-mono">
+            <p className="text-green-400 text-xs font-mono">
               {consoleLine}
-              <span className="inline-block w-1.5 h-3 bg-emerald-400 ml-1 align-middle th-blink" />
+              <span className="inline-block w-1.5 h-3 bg-green-400 ml-1 align-middle th-blink" />
             </p>
           </div>
         )}
@@ -498,7 +509,7 @@ function PipelineStrip({
             </div>
             <button
               onClick={onClose}
-              className="flex-shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+              className="flex-shrink-0 bg-green-500 hover:bg-green-400 text-slate-950 font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
             >
               View trip
             </button>
@@ -508,14 +519,14 @@ function PipelineStrip({
         {(phase === 'empty' || phase === 'error') && (
           <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 mt-1">
             <div className="flex items-center gap-2 min-w-0">
-              <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" />
+              <AlertTriangle size={16} className="text-red-400 flex-shrink-0" />
               <span className="text-slate-300 text-sm truncate">
                 {errorMessage || (phase === 'empty' ? 'No eligible flight deal turned up this round.' : 'Could not reach the agents.')}
               </span>
             </div>
             <button
               onClick={onRetry}
-              className="flex-shrink-0 flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+              className="flex-shrink-0 flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
             >
               <RefreshCw size={13} /> Try again
             </button>
@@ -526,7 +537,6 @@ function PipelineStrip({
   );
 }
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function Home() {
   const [deals, setDeals] = useState<TravelDeal[]>([]);
@@ -550,6 +560,7 @@ export default function Home() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [subDone, setSubDone] = useState({ transport: false, activities: false, currency: false });
   const runIdRef = useRef(0);
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 10000);
@@ -580,38 +591,32 @@ export default function Home() {
     loadData();
   }, []);
 
-  const isExpired = (createdAtString: string) => {
-    if (!createdAtString) return false;
-    const createdTime = new Date(createdAtString).getTime();
-    const oneHourInMs = 60 * 60 * 1000;
-    return now.getTime() - createdTime > oneHourInMs;
+  const clearAllTimeouts = () => {
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
   };
-
-  const latestRates = deals[0]?.exchange_rates || { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
 
   const triggerManualRun = async (params: typeof triggerParams) => {
     const runId = ++runIdRef.current;
+    
+    // Reset state
+    clearAllTimeouts();
     setPipelineDeal(null);
     setPipelineError(null);
     setElapsedSec(0);
     setSubDone({ transport: false, activities: false, currency: false });
     setPipelinePhase('received');
 
-    await delay(500);
-    if (runIdRef.current !== runId) return;
-    setPipelinePhase('flight');
-
-    await delay(900);
-    if (runIdRef.current !== runId) return;
-    setPipelinePhase('hotel');
-
-    await delay(900);
-    if (runIdRef.current !== runId) return;
-    setPipelinePhase('parallel');
-
-    const t1 = setTimeout(() => { if (runIdRef.current === runId) setSubDone((s) => ({ ...s, transport: true })); }, 1400);
-    const t2 = setTimeout(() => { if (runIdRef.current === runId) setSubDone((s) => ({ ...s, activities: true })); }, 2200);
-    const t3 = setTimeout(() => { if (runIdRef.current === runId) setSubDone((s) => ({ ...s, currency: true })); }, 3000);
+    // Setup visual timeline reflecting a ~2.5 to 3 min wait (150-180 seconds)
+    timeoutsRef.current.push(
+      setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('flight'); }, 10000), // 10s
+      setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('hotel'); }, 45000), // 45s
+      setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('parallel'); }, 85000), // 1m 25s
+      setTimeout(() => { if (runIdRef.current === runId) setSubDone(s => ({ ...s, transport: true })); }, 105000), // 1m 45s
+      setTimeout(() => { if (runIdRef.current === runId) setSubDone(s => ({ ...s, activities: true })); }, 125000), // 2m 05s
+      setTimeout(() => { if (runIdRef.current === runId) setSubDone(s => ({ ...s, currency: true })); }, 145000), // 2m 25s
+      setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('synthesize'); }, 155000) // 2m 35s
+    );
 
     try {
       const query = `?${new URLSearchParams({
@@ -620,38 +625,50 @@ export default function Home() {
         duration: params.duration,
         home_currency: params.homeCurrency,
       }).toString()}`;
+      
       const res = await fetch(`/api/cron${query}`);
       const data = await res.json();
+      
       if (runIdRef.current !== runId) return;
 
+      // Finish immediately regardless of current timer progress
+      clearAllTimeouts();
+      
       if (data.success && data.deal) {
         setPipelinePhase('synthesize');
-        await delay(700);
-        if (runIdRef.current !== runId) return;
-        setPipelineDeal(data.deal);
-        setPipelinePhase('done');
-        setDeals((prev) => [data.deal, ...prev].slice(0, 9));
+        setTimeout(() => {
+          if (runIdRef.current !== runId) return;
+          setPipelineDeal(data.deal);
+          setPipelinePhase('done');
+          setDeals((prev) => [data.deal, ...prev].slice(0, 9));
+        }, 1500); // Small final synthetic delay to show "done" state transition
       } else {
         setPipelineError(data.message || null);
         setPipelinePhase('empty');
       }
     } catch (err) {
       if (runIdRef.current !== runId) return;
+      clearAllTimeouts();
       setPipelineError('Could not reach the agents. Check your connection and try again.');
       setPipelinePhase('error');
-    } finally {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
     }
   };
 
   const closePipeline = () => {
     runIdRef.current++;
+    clearAllTimeouts();
     setPipelinePhase('idle');
   };
 
   const isPipelineBusy = pipelinePhase !== 'idle' && !['done', 'empty', 'error'].includes(pipelinePhase);
+  const isExpired = (createdAtString: string) => {
+    if (!createdAtString) return false;
+    const createdTime = new Date(createdAtString).getTime();
+    const oneHourInMs = 60 * 60 * 1000;
+    return now.getTime() - createdTime > oneHourInMs;
+  };
+
+  const latestRates = deals[0]?.exchange_rates || { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-6 md:p-12">
@@ -663,7 +680,7 @@ export default function Home() {
           <select
             value={displayCurrency}
             onChange={(e) => setDisplayCurrency(e.target.value)}
-            className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
+            className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-emerald-500"
           >
             <option value="USD">USD ($)</option>
             <option value="EUR">EUR (€)</option>
@@ -675,13 +692,13 @@ export default function Home() {
             disabled={isPipelineBusy}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
           >
-            <Radar size={15} className="text-amber-400" />
+            <Radar size={15} className="text-green-400" />
             {isPipelineBusy ? 'Hunting...' : 'Hunt for deals'}
           </button>
         </div>
       </div>
 
-      {/* Pipeline strip — inline, no overlay */}
+      {/* Pipeline strip */}
       {pipelinePhase !== 'idle' && (
         <PipelineStrip
           phase={pipelinePhase}
@@ -848,7 +865,7 @@ export default function Home() {
                 <select
                   value={triggerParams.departureId}
                   onChange={(e) => setTriggerParams({ ...triggerParams, departureId: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="CPH">Copenhagen (CPH)</option>
                   <option value="ARN">Stockholm Arlanda (ARN)</option>
@@ -869,7 +886,7 @@ export default function Home() {
                     onChange={(e) =>
                       setTriggerParams({ ...triggerParams, travelers: Number(e.target.value) || 1 })
                     }
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div>
@@ -879,7 +896,7 @@ export default function Home() {
                   <select
                     value={triggerParams.duration}
                     onChange={(e) => setTriggerParams({ ...triggerParams, duration: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="2">Weekend</option>
                     <option value="1">1 Week</option>
@@ -895,7 +912,7 @@ export default function Home() {
                 <select
                   value={triggerParams.homeCurrency}
                   onChange={(e) => setTriggerParams({ ...triggerParams, homeCurrency: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="SEK">SEK</option>
                   <option value="USD">USD</option>
@@ -913,7 +930,7 @@ export default function Home() {
               disabled={isPipelineBusy}
               className="w-full mt-6 flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
             >
-              <Radar size={15} className="text-amber-400" />
+              <Radar size={15} className="text-green-400" />
               Hunt for deals
             </button>
           </div>
@@ -961,19 +978,19 @@ export default function Home() {
             <div className="flex border-b border-gray-100 px-6 pt-2 shrink-0 bg-white">
               <button 
                 onClick={() => setActiveTab('overview')} 
-                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'overview' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'overview' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
               >
                 Overview
               </button>
               <button 
                 onClick={() => setActiveTab('daily_plan')} 
-                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
               >
                 Daily Plan
               </button>
               <button 
                 onClick={() => setActiveTab('guide')} 
-                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'guide' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'guide' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
               >
                 Local Guide
               </button>
@@ -1030,7 +1047,7 @@ export default function Home() {
                           href={selectedDeal.flight.flight_link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
                         >
                           Book Flight
                         </a>
@@ -1041,7 +1058,7 @@ export default function Home() {
                           href={selectedDeal.hotel?.link || `https://www.google.com/travel/search?q=${encodeURIComponent(`${selectedDeal.hotel.name} ${selectedDeal.destination} ${selectedDeal.country}`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
+                          className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
                         >
                           Book Hotel
                         </a>
@@ -1095,8 +1112,8 @@ export default function Home() {
 
               {/* Tab 2: Daily Plan */}
               {activeTab === 'daily_plan' && (
-                <div className="bg-indigo-50/30 p-5 rounded-xl border border-indigo-100">
-                  <h3 className="font-semibold text-indigo-950 text-base mb-2">Suggested Daily Schedule</h3>
+                <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100">
+                  <h3 className="font-semibold text-emerald-950 text-base mb-2">Suggested Daily Schedule</h3>
                   <FormattedText text={selectedDeal.final_itinerary} />
                 </div>
               )}
