@@ -672,9 +672,11 @@ export default function Home() {
                           Book Flight
                         </a>
                       )}
-                      {selectedDeal.hotel?.link && (
+                      
+                      {/* UPDATED: Book Hotel Button with Google Search Fallback */}
+                      {selectedDeal.hotel?.name && (
                         <a
-                          href={selectedDeal.hotel.link}
+                          href={selectedDeal.hotel?.link || `https://www.google.com/travel/search?q=${encodeURIComponent(`${selectedDeal.hotel.name} ${selectedDeal.destination} ${selectedDeal.country}`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
