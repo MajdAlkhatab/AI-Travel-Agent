@@ -5,7 +5,9 @@ import type { ReactNode } from 'react';
 import {
   Radar, Plane, BedDouble, Bus, Compass, Coins, Sparkles,
   CheckCircle2, Clock, X, AlertTriangle, RefreshCw,
-} from 'lucide-react';
+  Car, Smartphone, CloudSun, Map, BookOpen 
+}
+ from 'lucide-react';
 // npm install lucide-react
 
 interface Flight {
@@ -384,11 +386,31 @@ function BranchingParallelBox({ transport, activities, currency, activeOverall }
       {/* Left Fork Bracket */}
       <div className={`w-3 border-t-2 border-b-2 border-l-2 rounded-l-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
       
-      {/* Central Items */}
-      <div className="flex flex-col gap-2.5 px-3 py-2 bg-slate-900/40 rounded-md z-10 mx-1">
-        <MiniRow icon={Bus} label="Transport" status={transport} />
-        <MiniRow icon={Compass} label="Activities" status={activities} />
-        <MiniRow icon={Coins} label="Currency" status={currency} />
+      {/* Central Items - Now expanded to show the 6 sub-agents */}
+      <div className="flex gap-5 px-4 py-2.5 bg-slate-900/40 rounded-md z-10 mx-1">
+        
+        {/* Transport Agents */}
+        <div className="flex flex-col gap-2">
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Transport</div>
+          <MiniRow icon={Car} label="Taxi" status={transport} />
+          <MiniRow icon={Bus} label="Transit" status={transport} />
+          <MiniRow icon={Smartphone} label="Ride Apps" status={transport} />
+        </div>
+
+        {/* Activity Agents */}
+        <div className="flex flex-col gap-2">
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Activities</div>
+          <MiniRow icon={CloudSun} label="Weather" status={activities} />
+          <MiniRow icon={Map} label="To-Do" status={activities} />
+          <MiniRow icon={BookOpen} label="Culture" status={activities} />
+        </div>
+
+        {/* Currency Agent */}
+        <div className="flex flex-col gap-2">
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Rates</div>
+          <MiniRow icon={Coins} label="Currency" status={currency} />
+        </div>
+
       </div>
 
       {/* Right Fork Bracket */}
