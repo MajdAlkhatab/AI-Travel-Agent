@@ -380,38 +380,40 @@ function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; stat
   );
 }
 
-function BranchingParallelBox({ 
-  taxi, transit, rideApps, weather, todo, culture, currency, activeOverall 
-}: { 
-  taxi: NodeStatus; transit: NodeStatus; rideApps: NodeStatus; 
-  weather: NodeStatus; todo: NodeStatus; culture: NodeStatus; 
-  currency: NodeStatus; activeOverall: boolean 
-}) {
+function BranchingParallelBox({ transport, activities, currency, activeOverall }: { transport: NodeStatus; activities: NodeStatus; currency: NodeStatus; activeOverall: boolean }) {
   return (
     <div className="relative flex items-stretch flex-shrink-0 mx-1">
+      {/* Left Fork Bracket */}
       <div className={`w-3 border-t-2 border-b-2 border-l-2 rounded-l-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
       
+      {/* Central Items - Now expanded to show the 6 sub-agents */}
       <div className="flex gap-5 px-4 py-2.5 bg-slate-900/40 rounded-md z-10 mx-1">
+        
+        {/* Transport Agents */}
         <div className="flex flex-col gap-2">
           <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Transport</div>
-          <MiniRow icon={Car} label="Taxi" status={taxi} />
-          <MiniRow icon={Bus} label="Transit" status={transit} />
-          <MiniRow icon={Smartphone} label="Ride Apps" status={rideApps} />
+          <MiniRow icon={Car} label="Taxi" status={transport} />
+          <MiniRow icon={Bus} label="Transit" status={transport} />
+          <MiniRow icon={Smartphone} label="Ride Apps" status={transport} />
         </div>
 
+        {/* Activity Agents */}
         <div className="flex flex-col gap-2">
           <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Activities</div>
-          <MiniRow icon={CloudSun} label="Weather" status={weather} />
-          <MiniRow icon={Map} label="To-Do" status={todo} />
-          <MiniRow icon={BookOpen} label="Culture" status={culture} />
+          <MiniRow icon={CloudSun} label="Weather" status={activities} />
+          <MiniRow icon={Map} label="To-Do" status={activities} />
+          <MiniRow icon={BookOpen} label="Culture" status={activities} />
         </div>
 
+        {/* Currency Agent */}
         <div className="flex flex-col gap-2">
           <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Rates</div>
           <MiniRow icon={Coins} label="Currency" status={currency} />
         </div>
+
       </div>
 
+      {/* Right Fork Bracket */}
       <div className={`w-3 border-t-2 border-b-2 border-r-2 rounded-r-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
     </div>
   );
@@ -497,12 +499,8 @@ function PipelineStrip({
           <HConnector active={parallelOverall !== 'pending'} />
           <BranchingParallelBox
             activeOverall={parallelOverall !== 'pending'}
-            taxi={subStatus(subDone.taxi)}
-            transit={subStatus(subDone.transit)}
-            rideApps={subStatus(subDone.ride_apps)}
-            weather={subStatus(subDone.weather)}
-            todo={subStatus(subDone.todo)}
-            culture={subStatus(subDone.culture)}
+            transport={subStatus(subDone.transport)}
+            activities={subStatus(subDone.activities)}
             currency={subStatus(subDone.currency)}
           />
           <HConnector active={statusOf('synthesize', phase) !== 'pending'} />
@@ -583,10 +581,7 @@ export default function Home() {
   const [pipelineDeal, setPipelineDeal] = useState<TravelDeal | null>(null);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [subDone, setSubDone] = useState({ 
-    transport: false, activities: false, currency: false,
-    taxi: false, transit: false, ride_apps: false,
-    weather: false, todo: false, culture: false });
+  const [subDone, setSubDone] = useState({ transport: false, activities: false, currency: false });
   const runIdRef = useRef(0);
 
   useEffect(() => {
@@ -664,10 +659,8 @@ export default function Home() {
             if (runIdRef.current !== runId) return; // Ignore if user closed/restarted
 
             if (payload.type === 'status') {
-              if (payload.sub_node) {
-                setSubDone(s => ({ ...s, [payload.sub_node]: true }));
-              } 
-              else if (payload.node === 'trip_deals') {
+              if (payload.node === 'trip_deals') {
+                // Trip deals encompasses flight and hotel, so when it finishes jump straight to parallel
                 setPipelinePhase('parallel');
               } else if (payload.node === 'transport') {
                 setSubDone(s => ({ ...s, transport: true }));
@@ -678,7 +671,6 @@ export default function Home() {
               } else if (payload.node === 'synthesize') {
                 setPipelinePhase('synthesize');
               }
-            }
             } else if (payload.type === 'empty') {
               setPipelinePhase('empty');
             } else if (payload.type === 'complete') {
