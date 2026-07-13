@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization');
   const API_SECRET = process.env.API_SECRET_KEY;
 
-  // Ensure this endpoint can't be triggered by random people on the internet
+  // Ensure this endpoint can't be triggered by random public requests
   if (!API_SECRET || authHeader !== `Bearer ${API_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
   }
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const FB_PAGE_ID = process.env.FACEBOOK_PAGE_ID;
 
   if (!ACCESS_TOKEN || !IG_ACCOUNT_ID || !FB_PAGE_ID) {
-    return NextResponse.json({ error: 'Missing Meta environment variables in Vercel/env' }, { status: 500 });
+    return NextResponse.json({ error: 'Missing Meta environment variables in Vercel settings' }, { status: 500 });
   }
 
   try {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const { imageUrl, caption } = body;
 
     if (!imageUrl || !caption) {
-        return NextResponse.json({ error: 'Missing imageUrl or caption in request body' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing imageUrl or caption in request body' }, { status: 400 });
     }
 
     console.log("Starting Social Media Publish Sequence...");
@@ -43,8 +43,12 @@ export async function POST(request: Request) {
       })
     });
     const fbData = await fbRes.json();
-    if (fbData.error) console.error("Facebook Error:", fbData.error);
-    else console.log(`FB Post created successfully. ID: ${fbData.id}`);
+    
+    if (fbData.error) {
+      console.error("Facebook Publication Error Details:", fbData.error);
+    } else {
+      console.log(`Facebook Post created successfully. ID: ${fbData.id}`);
+    }
 
     // --- STEP B: CREATE INSTAGRAM CONTAINER ---
     const igContainerRes = await fetch(`https://graph.facebook.com/v25.0/${IG_ACCOUNT_ID}/media`, {
@@ -66,7 +70,7 @@ export async function POST(request: Request) {
     console.log(`IG Container created successfully. ID: ${creationId}`);
 
     // --- STEP C: SAFETY DELAY ---
-    // Give Meta's servers 3 seconds to fully download and process the image
+    // Give Meta's servers 3 seconds to fully download and process the image dimensions
     await delay(3000); 
 
     // --- STEP D: PUBLISH INSTAGRAM CONTAINER ---
@@ -78,7 +82,6 @@ export async function POST(request: Request) {
         access_token: ACCESS_TOKEN
       })
     });
-    
     const igPublishData = await igPublishRes.json();
 
     if (igPublishData.error) {
@@ -90,12 +93,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ 
       success: true, 
       message: 'Successfully posted to Facebook and Instagram!', 
-      facebookPostId: fbData.id,
+      facebookPostId: fbData.id || null,
       instagramPostId: igPublishData.id 
     });
 
   } catch (error: any) {
-    console.error("Publish Failed:", error.message);
+    console.error("Publish Flow Aborted:", error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

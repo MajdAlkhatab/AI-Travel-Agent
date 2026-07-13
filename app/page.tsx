@@ -8,7 +8,6 @@ import {
   Car, Smartphone, CloudSun, Map, BookOpen 
 }
  from 'lucide-react';
-// npm install lucide-react
 
 interface Flight {
   airline?: string;
@@ -59,12 +58,10 @@ interface TravelDeal {
   activity_summary: string;
   currency_summary: string;
   final_itinerary: string;
-  created_at: string; // ISO timestamp
+  created_at: string;
   travelers?: number;
   exchange_rates?: Record<string, number>;
 }
-
-// --- Pricing helpers ---------------------------------------------------
 
 const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', SEK: 'kr', EUR: '€', GBP: '£' };
 
@@ -132,8 +129,6 @@ function getDealEconomics(deal: TravelDeal) {
     hasSavings: totalSavings != null && totalSavings > 0,
   };
 }
-
-// --- UI components -------------------------------------------------------
 
 function StarRating({ rating }: { rating?: number }) {
   if (!rating) return null;
@@ -236,8 +231,6 @@ function FormattedText({ text }: { text: string }) {
 
   return <div>{blocks}</div>;
 }
-
-// --- Brand & Pipeline -------------------------------------------------
 
 function Logo() {
   return (
@@ -383,37 +376,25 @@ function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; stat
 function BranchingParallelBox({ transport, activities, currency, activeOverall }: { transport: NodeStatus; activities: NodeStatus; currency: NodeStatus; activeOverall: boolean }) {
   return (
     <div className="relative flex items-stretch flex-shrink-0 mx-1">
-      {/* Left Fork Bracket */}
       <div className={`w-3 border-t-2 border-b-2 border-l-2 rounded-l-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
-      
-      {/* Central Items - Now expanded to show the 6 sub-agents */}
       <div className="flex gap-5 px-4 py-2.5 bg-slate-900/40 rounded-md z-10 mx-1">
-        
-        {/* Transport Agents */}
         <div className="flex flex-col gap-2">
           <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Transport</div>
           <MiniRow icon={Car} label="Taxi" status={transport} />
           <MiniRow icon={Bus} label="Transit" status={transport} />
           <MiniRow icon={Smartphone} label="Ride Apps" status={transport} />
         </div>
-
-        {/* Activity Agents */}
         <div className="flex flex-col gap-2">
           <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Activities</div>
           <MiniRow icon={CloudSun} label="Weather" status={activities} />
           <MiniRow icon={Map} label="To-Do" status={activities} />
           <MiniRow icon={BookOpen} label="Culture" status={activities} />
         </div>
-
-        {/* Currency Agent */}
         <div className="flex flex-col gap-2">
           <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Rates</div>
           <MiniRow icon={Coins} label="Currency" status={currency} />
         </div>
-
       </div>
-
-      {/* Right Fork Bracket */}
       <div className={`w-3 border-t-2 border-b-2 border-r-2 rounded-r-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
     </div>
   );
@@ -560,7 +541,6 @@ function PipelineStrip({
   );
 }
 
-
 export default function Home() {
   const [deals, setDeals] = useState<TravelDeal[]>([]);
   const [selectedDeal, setSelectedDeal] = useState<TravelDeal | null>(null);
@@ -576,7 +556,6 @@ export default function Home() {
     homeCurrency: 'SEK',
   });
 
-  // --- Pipeline state ---
   const [pipelinePhase, setPipelinePhase] = useState<Phase>('idle');
   const [pipelineDeal, setPipelineDeal] = useState<TravelDeal | null>(null);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
@@ -616,15 +595,12 @@ export default function Home() {
   const triggerManualRun = async (params: typeof triggerParams) => {
     const runId = ++runIdRef.current;
     
-    // Reset pipeline state
     setPipelineDeal(null);
     setPipelineError(null);
     setElapsedSec(0);
     setSubDone({ transport: false, activities: false, currency: false });
     
-    // Visually start the pipeline
     setPipelinePhase('received');
-    // Start "flight" instantly to show user activity since trip_deals combines both flight & hotel
     setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('flight'); }, 800);
 
     try {
@@ -636,31 +612,27 @@ export default function Home() {
       }).toString()}`;
       
       const response = await fetch(`/api/generate-trip${query}`);
-      
       if (!response.body) throw new Error("No readable stream available");
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let partialData = '';
 
-      // Stream Event Loop
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         partialData += decoder.decode(value, { stream: true });
         const lines = partialData.split('\n\n');
-        partialData = lines.pop() || ''; // Keep the incomplete chunk for next pass
+        partialData = lines.pop() || '';
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const payload = JSON.parse(line.substring(6));
-            
-            if (runIdRef.current !== runId) return; // Ignore if user closed/restarted
+            if (runIdRef.current !== runId) return;
 
             if (payload.type === 'status') {
               if (payload.node === 'trip_deals') {
-                // Trip deals encompasses flight and hotel, so when it finishes jump straight to parallel
                 setPipelinePhase('parallel');
               } else if (payload.node === 'transport') {
                 setSubDone(s => ({ ...s, transport: true }));
@@ -674,34 +646,15 @@ export default function Home() {
             } else if (payload.type === 'empty') {
               setPipelinePhase('empty');
             } else if (payload.type === 'complete') {
-                setPipelinePhase('synthesize');
-                setTimeout(() => {
-                  if (runIdRef.current !== runId) return;
-                  setPipelineDeal(payload.data);
-                  setPipelinePhase('done');
-                  setDeals(prev => [payload.data, ...prev].slice(0, 9));
-
-                  // --- NEW: Trigger Social Media Publish ---
-                  const heroImage = payload.data.flight?.thumbnail || payload.data.hotel?.images?.[0]?.thumbnail;
-                  if (heroImage) {
-                    const socialCaption = `🔥 New Deal Alert: ${payload.data.destination}, ${payload.data.country}!\n\n✈️ Flights & Hotel found.\n\nHere is the vibe:\n${payload.data.activity_summary}\n\nLink in bio to see the full itinerary and book before prices change! 🌍✨`;
-                    
-                    // Fire and forget (doesn't block the UI)
-                    fetch('/api/publish', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        // Note: Replace this with your actual API_SECRET_KEY from your .env file
-                        'Authorization': `Bearer TripHunter_Super_Secret_2026` 
-                      },
-                      body: JSON.stringify({
-                        imageUrl: heroImage,
-                        caption: socialCaption
-                      })
-                    }).catch(err => console.error("Frontend publish error:", err));
-                  }
-                }, 1000);
-              } else if (payload.type === 'error') {
+              setPipelinePhase('synthesize');
+              setTimeout(() => {
+                if (runIdRef.current !== runId) return;
+                setPipelineDeal(payload.data);
+                setPipelinePhase('done');
+                setDeals(prev => [payload.data, ...prev].slice(0, 9));
+                // Note: The leaky fetch('/api/publish') code block has been removed safely.
+              }, 1000);
+            } else if (payload.type === 'error') {
               setPipelineError(payload.message || 'Error occurred');
               setPipelinePhase('error');
             }
@@ -716,7 +669,7 @@ export default function Home() {
   };
 
   const closePipeline = () => {
-    runIdRef.current++; // Invalidates the active stream so it stops updating state
+    runIdRef.current++;
     setPipelinePhase('idle');
   };
 
@@ -732,7 +685,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-6 md:p-12">
-      {/* Header Section */}
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <Logo />
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -758,7 +710,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Pipeline strip */}
       {pipelinePhase !== 'idle' && (
         <PipelineStrip
           phase={pipelinePhase}
@@ -773,7 +724,6 @@ export default function Home() {
         />
       )}
 
-      {/* Main Content Area */}
       <div className="max-w-6xl mx-auto">
         {loading ? (
           <div className="text-center py-12 text-gray-500">Loading live travel deals...</div>
@@ -909,19 +859,12 @@ export default function Home() {
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Run agents</h2>
-              <button
-                onClick={() => setShowTriggerForm(false)}
-                className="text-gray-400 hover:text-gray-600 font-semibold"
-              >
-                ✕
-              </button>
+              <button onClick={() => setShowTriggerForm(false)} className="text-gray-400 hover:text-gray-600 font-semibold">✕</button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                  Departure airport
-                </label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Departure airport</label>
                 <select
                   value={triggerParams.departureId}
                   onChange={(e) => setTriggerParams({ ...triggerParams, departureId: e.target.value })}
@@ -935,24 +878,18 @@ export default function Home() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                    Travelers
-                  </label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Travelers</label>
                   <input
                     type="number"
                     min={1}
                     max={10}
                     value={triggerParams.travelers}
-                    onChange={(e) =>
-                      setTriggerParams({ ...triggerParams, travelers: Number(e.target.value) || 1 })
-                    }
+                    onChange={(e) => setTriggerParams({ ...triggerParams, travelers: Number(e.target.value) || 1 })}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                    Trip duration
-                  </label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Trip duration</label>
                   <select
                     value={triggerParams.duration}
                     onChange={(e) => setTriggerParams({ ...triggerParams, duration: e.target.value })}
@@ -966,9 +903,7 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                  Home currency
-                </label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Home currency</label>
                 <select
                   value={triggerParams.homeCurrency}
                   onChange={(e) => setTriggerParams({ ...triggerParams, homeCurrency: e.target.value })}
@@ -1000,78 +935,36 @@ export default function Home() {
       {selectedDeal && (() => {
         const econ = getDealEconomics(selectedDeal);
         return (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-          onClick={() => setSelectedDeal(null)}
-        >
-          <div
-            className="bg-white rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-gray-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Hero Header */}
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setSelectedDeal(null)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-gray-100" onClick={(e) => e.stopPropagation()}>
             <div className="relative h-56 flex-shrink-0 rounded-t-2xl overflow-hidden">
               {selectedDeal.flight?.thumbnail ? (
-                <img
-                  src={selectedDeal.flight.thumbnail}
-                  alt={selectedDeal.destination}
-                  className="w-full h-full object-cover"
-                />
+                <img src={selectedDeal.flight.thumbnail} alt={selectedDeal.destination} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900" />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-              <button
-                onClick={() => setSelectedDeal(null)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-gray-600 font-semibold transition-colors z-10"
-              >
-                ✕
-              </button>
+              <button onClick={() => setSelectedDeal(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-gray-600 font-semibold transition-colors z-10">✕</button>
               <div className="absolute bottom-0 left-0 right-0 p-6">
                 <h2 className="text-white text-2xl font-semibold tracking-tight">{selectedDeal.destination}, {selectedDeal.country}</h2>
-                <p className="text-white/80 text-sm mt-1">
-                  {selectedDeal.flight?.highlights || 'Full agent-synthesized travel plan'}
-                </p>
+                <p className="text-white/80 text-sm mt-1">{selectedDeal.flight?.highlights || 'Full agent-synthesized travel plan'}</p>
               </div>
             </div>
 
-            {/* Tab Navigation */}
             <div className="flex border-b border-gray-100 px-6 pt-2 shrink-0 bg-white">
-              <button 
-                onClick={() => setActiveTab('overview')} 
-                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'overview' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
-              >
-                Overview
-              </button>
-              
-              <button 
-                onClick={() => setActiveTab('guide')} 
-                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'guide' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
-              >
-                Local Guide
-              </button>
-
-              <button 
-                onClick={() => setActiveTab('daily_plan')} 
-                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
-              >
-                Daily Plan
-              </button>
+              <button onClick={() => setActiveTab('overview')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'overview' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Overview</button>
+              <button onClick={() => setActiveTab('guide')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'guide' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Local Guide</button>
+              <button onClick={() => setActiveTab('daily_plan')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Daily Plan</button>
             </div>
 
-            {/* Scrollable Content Area */}
             <div className="p-6 overflow-y-auto text-sm text-gray-700 leading-relaxed rounded-b-2xl bg-white">
-              
-              {/* Tab 1: Overview */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
                   <div>
                     <div className="flex justify-between items-end mb-3">
                       <h3 className="font-semibold text-gray-900 text-base">Price breakdown</h3>
                       {selectedDeal.currency_summary && (
-                        <span 
-                          className="text-xs font-medium text-gray-400 flex items-center gap-1 cursor-help hover:text-gray-600 transition-colors" 
-                          title={selectedDeal.currency_summary}
-                        >
+                        <span className="text-xs font-medium text-gray-400 flex items-center gap-1 cursor-help hover:text-gray-600 transition-colors" title={selectedDeal.currency_summary}>
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
                           Live Rates
                         </span>
@@ -1080,13 +973,7 @@ export default function Home() {
                     
                     <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2">
                       <PriceLine label={`Flight · ${selectedDeal.flight?.airline || 'Airline'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} rates={latestRates} />
-                      <PriceLine
-                        label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`}
-                        current={econ.hotelTotalCurrent}
-                        original={econ.hotelTotalOriginal}
-                        currency={displayCurrency}
-                        rates={latestRates}
-                      />
+                      <PriceLine label={`Hotel${econ.nights ? ` · ${econ.nights} night${econ.nights === 1 ? '' : 's'}` : ''}`} current={econ.hotelTotalCurrent} original={econ.hotelTotalOriginal} currency={displayCurrency} rates={latestRates} />
                       <div className="pt-2 border-t border-gray-200">
                         <PriceLine label="Total" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} rates={latestRates} emphasize />
                       </div>
@@ -1095,36 +982,15 @@ export default function Home() {
                           <span className="text-xs font-medium text-green-800">You save</span>
                           <span className="text-sm font-semibold text-green-900">
                             {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
-                            {econ.totalSavingsPercent != null && (
-                              <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>
-                            )}
+                            {econ.totalSavingsPercent != null && <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>}
                           </span>
                         </div>
                       )}
                     </div>
 
                     <div className="flex gap-3 mt-4">
-                      {selectedDeal.flight?.flight_link && (
-                        <a
-                          href={selectedDeal.flight.flight_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
-                        >
-                          Book Flight
-                        </a>
-                      )}
-                      
-                      {selectedDeal.hotel?.name && (
-                        <a
-                          href={selectedDeal.hotel?.link || `https://www.google.com/travel/search?q=${encodeURIComponent(`${selectedDeal.hotel.name} ${selectedDeal.destination} ${selectedDeal.country}`)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white text-center py-2.5 rounded-xl font-medium transition-colors"
-                        >
-                          Book Hotel
-                        </a>
-                      )}
+                      {selectedDeal.flight?.flight_link && <a href={selectedDeal.flight.flight_link} target="_blank" rel="noopener noreferrer" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors">Book Flight</a>}
+                      {selectedDeal.hotel?.name && <a href={selectedDeal.hotel?.link || `https://www.google.com/travel/search?q=${encodeURIComponent(`${selectedDeal.hotel.name} ${selectedDeal.destination} ${selectedDeal.country}`)}`} target="_blank" rel="noopener noreferrer" className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white text-center py-2.5 rounded-xl font-medium transition-colors">Book Hotel</a>}
                     </div>
                   </div>
 
@@ -1133,46 +999,30 @@ export default function Home() {
                       <p className="font-medium text-gray-900 truncate">{selectedDeal.hotel?.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <StarRating rating={selectedDeal.hotel?.overall_rating} />
-                        {selectedDeal.hotel?.overall_rating && (
-                          <span className="text-gray-400 text-xs">({selectedDeal.hotel?.reviews ?? 0})</span>
-                        )}
+                        {selectedDeal.hotel?.overall_rating && <span className="text-gray-400 text-xs">({selectedDeal.hotel?.reviews ?? 0})</span>}
                       </div>
-                      {selectedDeal.hotel?.deal_description && (
-                        <span className="inline-block text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full mt-1.5">
-                          {selectedDeal.hotel.deal_description}
-                        </span>
-                      )}
+                      {selectedDeal.hotel?.deal_description && <span className="inline-block text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full mt-1.5">{selectedDeal.hotel.deal_description}</span>}
                     </div>
 
-                    <p className="text-gray-500 mt-3">
-                      Travel window: {selectedDeal.start_date} to {selectedDeal.end_date} • 👥 {selectedDeal.travelers || 2} Persons • ✈️ {selectedDeal.flight?.departure_airport_code || 'Origin'} → {selectedDeal.flight?.arrival_airport_code || 'Dest'}
-                    </p>
+                    <p className="text-gray-500 mt-3">Travel window: {selectedDeal.start_date} to {selectedDeal.end_date} • 👥 {selectedDeal.travelers || 2} Persons • ✈️ {selectedDeal.flight?.departure_airport_code || 'Origin'} → {selectedDeal.flight?.arrival_airport_code || 'Dest'}</p>
 
                     {selectedDeal.hotel?.images && selectedDeal.hotel.images.length > 0 && (
                       <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
                         {selectedDeal.hotel.images.slice(0, 4).map((img, i) => (
-                          <img
-                            key={i}
-                            src={img.thumbnail}
-                            alt={`${selectedDeal.hotel?.name || 'Hotel'} photo ${i + 1}`}
-                            className="w-24 h-20 object-cover rounded-lg flex-shrink-0"
-                          />
+                          <img key={i} src={img.thumbnail} alt={`${selectedDeal.hotel?.name || 'Hotel'} photo ${i + 1}`} className="w-24 h-20 object-cover rounded-lg flex-shrink-0" />
                         ))}
                       </div>
                     )}
 
                     {selectedDeal.hotel?.amenities && selectedDeal.hotel.amenities.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-3">
-                        {selectedDeal.hotel.amenities.map((a, i) => (
-                          <span key={i} className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">{a}</span>
-                        ))}
+                        {selectedDeal.hotel.amenities.map((a, i) => <span key={i} className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">{a}</span>)}
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Tab 2: Daily Plan */}
               {activeTab === 'daily_plan' && (
                 <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100">
                   <h3 className="font-semibold text-emerald-950 text-base mb-2">Suggested Daily Schedule</h3>
@@ -1180,34 +1030,22 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Tab 3: Local Guide */}
               {activeTab === 'guide' && (
                 <div className="space-y-6">
-                  
                   <div>
                     <h3 className="font-semibold text-gray-900 text-base mb-2">Currency & Exchange</h3>
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-gray-700">
-                      {selectedDeal.currency_summary}
-                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-gray-700">{selectedDeal.currency_summary}</div>
                   </div>
-                  {/* ---------------------------- */}
-
                   <div>
                     <h3 className="font-semibold text-gray-900 text-base mb-2">Airport & Hotel Transfers</h3>
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                      <FormattedText text={selectedDeal.transport_summary} />
-                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100"><FormattedText text={selectedDeal.transport_summary} /></div>
                   </div>
-
                   <div>
                     <h3 className="font-semibold text-gray-900 text-base mb-2">Activities &amp; local culture</h3>
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                      <FormattedText text={selectedDeal.activity_summary} />
-                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100"><FormattedText text={selectedDeal.activity_summary} /></div>
                   </div>
                 </div>
               )}
-              
             </div>
           </div>
         </div>
