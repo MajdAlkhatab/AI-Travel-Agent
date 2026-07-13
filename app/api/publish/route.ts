@@ -1,50 +1,101 @@
 import { NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
-  // 1. Pull your secure variables directly from Vercel's environment
-  const ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN;
-  const IG_ACCOUNT_ID = process.env.INSTAGRAM_ACCOUNT_ID;
+// Helper function to create a small safety delay for Meta's servers
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  if (!ACCESS_TOKEN || !IG_ACCOUNT_ID) {
-    return NextResponse.json({ error: 'Missing Meta API credentials in Vercel' }, { status: 500 });
+export async function POST(request: Request) {
+  // --- 1. SECURITY CHECK ---
+  const authHeader = request.headers.get('authorization');
+  const API_SECRET = process.env.API_SECRET_KEY;
+
+  // Ensure this endpoint can't be triggered by random people on the internet
+  if (!API_SECRET || authHeader !== `Bearer ${API_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
+  }
+
+  // --- 2. ENVIRONMENT VARIABLES ---
+  const ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN;
+  const IG_ACCOUNT_ID = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID; 
+  const FB_PAGE_ID = process.env.FACEBOOK_PAGE_ID;
+
+  if (!ACCESS_TOKEN || !IG_ACCOUNT_ID || !FB_PAGE_ID) {
+    return NextResponse.json({ error: 'Missing Meta environment variables in Vercel/env' }, { status: 500 });
   }
 
   try {
-    // 2. Grab the image and caption you want to post from the request body
     const body = await request.json();
     const { imageUrl, caption } = body;
 
-    // STEP A: Create the media container on Instagram
-    const containerUrl = `https://graph.facebook.com/v20.0/${IG_ACCOUNT_ID}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${ACCESS_TOKEN}`;
-    
-    const containerRes = await fetch(containerUrl, { method: 'POST' });
-    const containerData = await containerRes.json();
-
-    if (containerData.error) {
-      throw new Error(`Container Error: ${containerData.error.message}`);
+    if (!imageUrl || !caption) {
+        return NextResponse.json({ error: 'Missing imageUrl or caption in request body' }, { status: 400 });
     }
 
-    const creationId = containerData.id;
+    console.log("Starting Social Media Publish Sequence...");
 
-    // STEP B: Publish the container to your live feed
-    const publishUrl = `https://graph.facebook.com/v20.0/${IG_ACCOUNT_ID}/media_publish?creation_id=${creationId}&access_token=${ACCESS_TOKEN}`;
-    
-    const publishRes = await fetch(publishUrl, { method: 'POST' });
-    const publishData = await publishRes.json();
+    // --- STEP A: POST TO FACEBOOK PAGE ---
+    const fbRes = await fetch(`https://graph.facebook.com/v25.0/${FB_PAGE_ID}/photos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: imageUrl,
+        message: caption,
+        access_token: ACCESS_TOKEN
+      })
+    });
+    const fbData = await fbRes.json();
+    if (fbData.error) console.error("Facebook Error:", fbData.error);
+    else console.log(`FB Post created successfully. ID: ${fbData.id}`);
 
-    if (publishData.error) {
-      throw new Error(`Publish Error: ${publishData.error.message}`);
+    // --- STEP B: CREATE INSTAGRAM CONTAINER ---
+    const igContainerRes = await fetch(`https://graph.facebook.com/v25.0/${IG_ACCOUNT_ID}/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_url: imageUrl,
+        caption: caption,
+        access_token: ACCESS_TOKEN
+      })
+    });
+    const igContainerData = await igContainerRes.json();
+
+    if (igContainerData.error) {
+      throw new Error(`IG Container Error: ${igContainerData.error.message}`);
     }
 
-    // Success! Return the official Instagram Post ID
+    const creationId = igContainerData.id;
+    console.log(`IG Container created successfully. ID: ${creationId}`);
+
+    // --- STEP C: SAFETY DELAY ---
+    // Give Meta's servers 3 seconds to fully download and process the image
+    await delay(3000); 
+
+    // --- STEP D: PUBLISH INSTAGRAM CONTAINER ---
+    const igPublishRes = await fetch(`https://graph.facebook.com/v25.0/${IG_ACCOUNT_ID}/media_publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        creation_id: creationId,
+        access_token: ACCESS_TOKEN
+      })
+    });
+    
+    const igPublishData = await igPublishRes.json();
+
+    if (igPublishData.error) {
+      throw new Error(`IG Publish Error: ${igPublishData.error.message}`);
+    }
+
+    console.log(`Successfully published to Instagram! Post ID: ${igPublishData.id}`);
+    
     return NextResponse.json({ 
       success: true, 
-      message: 'Successfully posted to TripHunter!', 
-      postId: publishData.id 
+      message: 'Successfully posted to Facebook and Instagram!', 
+      facebookPostId: fbData.id,
+      instagramPostId: igPublishData.id 
     });
 
   } catch (error: any) {
-    console.error("Instagram Publish Failed:", error.message);
+    console.error("Publish Failed:", error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

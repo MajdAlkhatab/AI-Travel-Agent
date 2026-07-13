@@ -4,17 +4,12 @@ import { put, list } from '@vercel/blob';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    // Falls back to the same defaults the scheduled cron run has always
-    // used, so calls with no params (the cron schedule itself) behave
-    // exactly as before. Manual triggers from the dashboard can override any
-    // of these.
     const departureId = searchParams.get('departure_id') || 'CPH';
     const travelers = searchParams.get('travelers') || '2';
     const duration = searchParams.get('duration') || '2';
     const homeCurrency = searchParams.get('home_currency') || 'SEK';
 
-    // 1. Fetch existing deals FIRST, so we know which countries to avoid
-    // repeating before calling the Python agents.
+    // 1. Fetch existing deals FIRST
     let existingDeals: any[] = [];
     const { blobs } = await list({ prefix: 'deals.json' });
 
@@ -25,7 +20,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // Countries from the last 7 saved trips, deduped, comma-joined.
     const recentCountries = Array.from(
       new Set(
         existingDeals
@@ -35,7 +29,7 @@ export async function GET(request: Request) {
       )
     );
 
-    // 2. Call your Python AI Agents, passing the params and exclusion list along
+    // 2. Call your Python AI Agents
     const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
     const host = request.headers.get('host');
     const pythonApiUrl = `${protocol}://${host}/api/generate-trip?${new URLSearchParams({
@@ -55,7 +49,8 @@ export async function GET(request: Request) {
     }
 
     const newDeal = await agentResponse.json();
-    // Fetch live exchange rates (Base USD) and attach to the deal
+    
+    // Fetch live exchange rates
     try {
       const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=SEK,EUR,GBP');
       if (fxRes.ok) {
@@ -69,13 +64,10 @@ export async function GET(request: Request) {
       }
     } catch (e) {
       console.warn("Failed to fetch exchange rates, using fallbacks.");
-      // Safe fallback if the API hiccups
       newDeal.exchange_rates = { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
     }
 
-    // 3. Bronze: persist the untouched raw SerpApi responses for this run,
-    // one file per run, timestamped so nothing is ever overwritten. Saved
-    // even if no flight deal was found, so failed runs are debuggable too.
+    // 3. Bronze Save
     const bronzeTimestamp = newDeal?.created_at || new Date().toISOString();
     try {
       await put(`bronze/${bronzeTimestamp}.json`, JSON.stringify({
@@ -88,11 +80,10 @@ export async function GET(request: Request) {
         contentType: 'application/json'
       });
     } catch (bronzeError) {
-      // Never let a bronze-save failure block the main deal-saving flow
       console.error("Bronze save failed:", bronzeError);
     }
 
-    // 4. Guard: if no flight was found, don't save a broken card
+    // 4. Guard
     if (!newDeal || !newDeal.destination) {
       console.warn("No valid deal found this run. Skipping save.");
       return NextResponse.json({
@@ -101,26 +92,59 @@ export async function GET(request: Request) {
       });
     }
 
-    // 5. Strip the bulky raw fields before storing the UI-facing deal —
-    // deals.json keeps the exact same shape it always had.
     const { raw_flight_response, raw_hotel_response, ...curatedDeal } = newDeal;
 
-    // 6. Add the new deal to the front of the list, keep only the latest 9 deals (3 rows)
+    // 5. Overwrite deals.json
     existingDeals.unshift(curatedDeal);
     if (existingDeals.length > 9) {
       existingDeals = existingDeals.slice(0, 9);
     }
 
-    // 7. Overwrite the deals.json file in Vercel Blob
     await put('deals.json', JSON.stringify(existingDeals), {
       access: 'public',
       addRandomSuffix: false,
       contentType: 'application/json'
     });
 
+    // ------------------------------------------------------------------
+    // 6. TRIGGER SOCIAL MEDIA PUBLISHING (NEW)
+    // ------------------------------------------------------------------
+    try {
+      const heroImage = curatedDeal.flight?.thumbnail || curatedDeal.hotel?.images?.[0]?.thumbnail;
+      
+      if (heroImage) {
+        // Construct a clean, emoji-filled caption using the AI's data
+        const socialCaption = `🔥 New Deal Alert: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flights & Hotel found.\n\nHere is the vibe:\n${curatedDeal.activity_summary}\n\nLink in bio to see the full itinerary and book before prices change! 🌍✨`;
+        
+        const publishUrl = `${protocol}://${host}/api/publish`;
+        console.log("Triggering Social Media Publish at:", publishUrl);
+        
+        // Call your new /api/publish route securely
+        const publishRes = await fetch(publishUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
+          },
+          body: JSON.stringify({
+            imageUrl: heroImage,
+            caption: socialCaption
+          })
+        });
+        
+        const publishData = await publishRes.json();
+        console.log("Publish Route Response:", publishData);
+      }
+    } catch (publishErr) {
+      // If publishing fails, we just log it. We don't crash the cron job, 
+      // because the deal was already successfully saved to the website.
+      console.error("Failed to trigger social media publish:", publishErr);
+    }
+    // ------------------------------------------------------------------
+
     return NextResponse.json({
       success: true,
-      message: "Deal saved to Blob successfully!",
+      message: "Deal saved to Blob and social media triggered successfully!",
       deal: curatedDeal
     });
 
