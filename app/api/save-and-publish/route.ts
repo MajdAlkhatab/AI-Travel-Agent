@@ -1,0 +1,61 @@
+import { NextResponse } from 'next/server';
+import { put, list } from '@vercel/blob';
+
+export async function POST(request: Request) {
+  try {
+    const curatedDeal = await request.json();
+
+    // 1. Permanently save manual trip to your website database (Vercel Blob)
+    let existingDeals: any[] = [];
+    const { blobs } = await list({ prefix: 'deals.json' });
+
+    if (blobs.length > 0) {
+      const blobResponse = await fetch(blobs[0].url, { cache: 'no-store' });
+      if (blobResponse.ok) {
+        existingDeals = await blobResponse.json();
+      }
+    }
+
+    existingDeals.unshift(curatedDeal);
+    if (existingDeals.length > 9) {
+      existingDeals = existingDeals.slice(0, 9);
+    }
+
+    await put('deals.json', JSON.stringify(existingDeals), {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'application/json'
+    });
+
+    // 2. Trigger your secure Instagram/Facebook cross-poster
+    const heroImage = curatedDeal.flight?.thumbnail || curatedDeal.hotel?.images?.[0]?.thumbnail;
+    
+    if (heroImage && process.env.API_SECRET_KEY) {
+      const socialCaption = `🔥 New Deal Alert: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flights & Hotel found.\n\nHere is the vibe:\n${curatedDeal.activity_summary}\n\nLink in bio to see the full itinerary and book before prices change! 🌍✨`;
+      
+      const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+      const host = request.headers.get('host');
+      const publishUrl = `${protocol}://${host}/api/publish`;
+
+      console.log("Triggering Social Media for manual hunt at:", publishUrl);
+
+      await fetch(publishUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
+        },
+        body: JSON.stringify({
+          imageUrl: heroImage,
+          caption: socialCaption
+        })
+      });
+    }
+
+    return NextResponse.json({ success: true, message: "Manually hunted trip saved and published successfully!" });
+
+  } catch (error: any) {
+    console.error("Save and publish endpoint failed:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

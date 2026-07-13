@@ -652,7 +652,18 @@ export default function Home() {
                 setPipelineDeal(payload.data);
                 setPipelinePhase('done');
                 setDeals(prev => [payload.data, ...prev].slice(0, 9));
-                // Note: The leaky fetch('/api/publish') code block has been removed safely.
+
+                // --- SECURE TRUCK COUPLING: TRIGGER BACKEND SAVE & PUBLISH ---
+                fetch('/api/save-and-publish', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify(payload.data)
+                })
+                .then(res => res.json())
+                .then(data => console.log("Server side save/publish reaction:", data))
+                .catch(err => console.error("Failed to execute secure cross-post:", err));
               }, 1000);
             } else if (payload.type === 'error') {
               setPipelineError(payload.message || 'Error occurred');
