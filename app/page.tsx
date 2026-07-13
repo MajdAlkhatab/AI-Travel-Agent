@@ -674,14 +674,34 @@ export default function Home() {
             } else if (payload.type === 'empty') {
               setPipelinePhase('empty');
             } else if (payload.type === 'complete') {
-              setPipelinePhase('synthesize');
-              setTimeout(() => {
-                if (runIdRef.current !== runId) return;
-                setPipelineDeal(payload.data);
-                setPipelinePhase('done');
-                setDeals(prev => [payload.data, ...prev].slice(0, 9));
-              }, 1000); // 1-second delay so user registers 'synthesize' phase just finished
-            } else if (payload.type === 'error') {
+                setPipelinePhase('synthesize');
+                setTimeout(() => {
+                  if (runIdRef.current !== runId) return;
+                  setPipelineDeal(payload.data);
+                  setPipelinePhase('done');
+                  setDeals(prev => [payload.data, ...prev].slice(0, 9));
+
+                  // --- NEW: Trigger Social Media Publish ---
+                  const heroImage = payload.data.flight?.thumbnail || payload.data.hotel?.images?.[0]?.thumbnail;
+                  if (heroImage) {
+                    const socialCaption = `🔥 New Deal Alert: ${payload.data.destination}, ${payload.data.country}!\n\n✈️ Flights & Hotel found.\n\nHere is the vibe:\n${payload.data.activity_summary}\n\nLink in bio to see the full itinerary and book before prices change! 🌍✨`;
+                    
+                    // Fire and forget (doesn't block the UI)
+                    fetch('/api/publish', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        // Note: Replace this with your actual API_SECRET_KEY from your .env file
+                        'Authorization': `Bearer TripHunter_Super_Secret_2026` 
+                      },
+                      body: JSON.stringify({
+                        imageUrl: heroImage,
+                        caption: socialCaption
+                      })
+                    }).catch(err => console.error("Frontend publish error:", err));
+                  }
+                }, 1000);
+              } else if (payload.type === 'error') {
               setPipelineError(payload.message || 'Error occurred');
               setPipelinePhase('error');
             }
