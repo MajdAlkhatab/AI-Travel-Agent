@@ -612,11 +612,64 @@ export default function Home() {
       }).toString()}`;
       
       const response = await fetch(`/api/generate-trip${query}`);
-      if (!response.body) throw new Error("No readable stream available");
       
+      // --- FIX 1: AUTO-DETECT PLAIN JSON RESPONSES ---
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const rawData = await response.json();
+        
+        // Extract inner data block if wrapped, otherwise use raw
+        const dealData = rawData.data || rawData;
+
+        if (runIdRef.current !== runId) return;
+        
+        setPipelineDeal(dealData);
+        setPipelinePhase('done');
+        setDeals(prev => [dealData, ...prev].slice(0, 9));
+
+        // Fire the backend storage and social publisher instantly
+        await fetch('/api/save-and-publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dealData)
+        });
+        return;
+      }
+
+      // --- FALLBACK: STREAMING SSE HANDLING ---
+      if (!response.body) throw new Error("No readable stream available");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let partialData = '';
+
+      const handlePayload = (payload: any) => {
+        if (payload.type === 'status') {
+          if (payload.node === 'trip_deals') setPipelinePhase('parallel');
+          else if (payload.node === 'transport') setSubDone(s => ({ ...s, transport: true }));
+          else if (payload.node === 'activities') setSubDone(s => ({ ...s, activities: true }));
+          else if (payload.node === 'currency') setSubDone(s => ({ ...s, currency: true }));
+          else if (payload.node === 'synthesize') setPipelinePhase('synthesize');
+        } else if (payload.type === 'empty') {
+          setPipelinePhase('empty');
+        } else if (payload.type === 'complete') {
+          setPipelinePhase('synthesize');
+          setTimeout(() => {
+            if (runIdRef.current !== runId) return;
+            setPipelineDeal(payload.data);
+            setPipelinePhase('done');
+            setDeals(prev => [payload.data, ...prev].slice(0, 9));
+
+            fetch('/api/save-and-publish', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload.data)
+            }).catch(err => console.error("Cross-post error:", err));
+          }, 1000);
+        } else if (payload.type === 'error') {
+          setPipelineError(payload.message || 'Error occurred');
+          setPipelinePhase('error');
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -630,54 +683,24 @@ export default function Home() {
           if (line.startsWith('data: ')) {
             const payload = JSON.parse(line.substring(6));
             if (runIdRef.current !== runId) return;
-
-            if (payload.type === 'status') {
-              if (payload.node === 'trip_deals') {
-                setPipelinePhase('parallel');
-              } else if (payload.node === 'transport') {
-                setSubDone(s => ({ ...s, transport: true }));
-              } else if (payload.node === 'activities') {
-                setSubDone(s => ({ ...s, activities: true }));
-              } else if (payload.node === 'currency') {
-                setSubDone(s => ({ ...s, currency: true }));
-              } else if (payload.node === 'synthesize') {
-                setPipelinePhase('synthesize');
-              }
-            } else if (payload.type === 'empty') {
-              setPipelinePhase('empty');
-            } else if (payload.type === 'complete') {
-              setPipelinePhase('synthesize');
-              setTimeout(() => {
-                if (runIdRef.current !== runId) return;
-                setPipelineDeal(payload.data);
-                setPipelinePhase('done');
-                setDeals(prev => [payload.data, ...prev].slice(0, 9));
-
-                // --- SECURE TRUCK COUPLING: TRIGGER BACKEND SAVE & PUBLISH ---
-                fetch('/api/save-and-publish', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify(payload.data)
-                })
-                .then(res => res.json())
-                .then(data => console.log("Server side save/publish reaction:", data))
-                .catch(err => console.error("Failed to execute secure cross-post:", err));
-              }, 1000);
-            } else if (payload.type === 'error') {
-              setPipelineError(payload.message || 'Error occurred');
-              setPipelinePhase('error');
-            }
+            handlePayload(payload);
           }
         }
       }
+
+      // Process any leftover buffered data string at the end of the stream
+      if (partialData.trim().startsWith('data: ')) {
+        const payload = JSON.parse(partialData.trim().substring(6));
+        handlePayload(payload);
+      }
+
     } catch (err) {
       if (runIdRef.current !== runId) return;
       setPipelineError('Could not reach the agents. Check your connection and try again.');
       setPipelinePhase('error');
     }
   };
+
 
   const closePipeline = () => {
     runIdRef.current++;

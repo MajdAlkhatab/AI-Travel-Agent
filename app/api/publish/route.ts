@@ -15,8 +15,10 @@ export async function POST(request: Request) {
 
   // --- 2. ENVIRONMENT VARIABLES ---
   const ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN;
-  const IG_ACCOUNT_ID = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID; 
   const FB_PAGE_ID = process.env.FACEBOOK_PAGE_ID;
+  
+  // Natively checks both possible variable names to prevent crashes
+  const IG_ACCOUNT_ID = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_ACCOUNT_ID; 
 
   if (!ACCESS_TOKEN || !IG_ACCOUNT_ID || !FB_PAGE_ID) {
     return NextResponse.json({ error: 'Missing Meta environment variables in Vercel settings' }, { status: 500 });
