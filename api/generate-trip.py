@@ -204,9 +204,10 @@ transport_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt=
 weather_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer.")
 
 activities_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer.")
-culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="Give 2-3 short cultural tips for visiting.")
+culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="You are a cultural expert. Research the destination and provide exactly 6 things: one 'Do', one 'Don't', one local slang word (with meaning), one strict dining/tipping rule, a one-sentence 'vibe check' of the city's pace, and a list of the top 3 must-try local foods.")
 
-activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination. Use exactly three Markdown headers: '### 🌤️ Weather', '### 🎯 Top Activities', and '### 🏛️ Culture & Etiquette'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (6 short, punchy bullet points) . CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs. answer in short and clean way")
+activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination. Use exactly three Markdown headers: '### 🌤️ Weather', '### 🎯 Top Activities', and '### 🏛️ Culture & Etiquette'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (Exactly 6 bullet points: Do, Don't, Slang, Dining, Vibe, and Top 3 Foods. CRITICAL: Each must be strictly one short sentence). CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs.")
+
 
 tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer.")
 
