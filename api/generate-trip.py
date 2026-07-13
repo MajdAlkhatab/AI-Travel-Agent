@@ -209,7 +209,7 @@ culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="You
 activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination. Use exactly three Markdown headers: '### 🌤️ Weather', '### 🎯 Top Activities', and '### 🏛️ Culture & Etiquette'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (Exactly 6 bullet points: Do, Don't, Slang, Dining, Vibe, and Top 3 Foods. CRITICAL: Each must be strictly one short sentence). CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs.")
 
 
-tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer.")
+tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer without mentioning any dates.")
 
 _frankfurter_executor = None
 async def get_frankfurter_executor():
@@ -217,7 +217,7 @@ async def get_frankfurter_executor():
     if _frankfurter_executor is None:
         client = MultiServerMCPClient({"frankfurter": {"transport": "streamable_http", "url": "https://mcp.frankfurter.dev/"}})
         tools = await client.get_tools()
-        _frankfurter_executor = create_agent(model="gpt-5-nano", tools=tools, system_prompt="Use get_rates to find exchange rate. Return short answer.")
+        _frankfurter_executor = create_agent(model="gpt-5-nano", tools=tools, system_prompt="Use get_rates to find exchange rate. Return short answer without mentioning any dates.")
     return _frankfurter_executor
 
 # --- 4. LANGGRAPH NODES ---
