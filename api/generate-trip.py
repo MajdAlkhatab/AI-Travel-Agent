@@ -88,7 +88,8 @@ def get_flight_deals(departure_id, outbound_date_range, travel_duration="1", cur
     print(f"[flight-search] request departure_id={departure_id} outbound_date={outbound_date_range} travel_duration={travel_duration} currency={currency}")
 
     start = time.monotonic()
-    result = serp_client.search(params)
+    raw_result = serp_client.search(params)
+    result = raw_result.as_dict()
     elapsed_ms = round((time.monotonic() - start) * 1000, 1)
 
     metadata = result.get("search_metadata", {}) or {}
@@ -127,7 +128,8 @@ def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, curren
     print(f"[hotel-search] request q='{destination} hotels' check_in={check_in_date} check_out={check_out_date} adults={adults}")
 
     start = time.monotonic()
-    result = serp_client.search(params)
+    raw_result = serp_client.search(params)
+    result = raw_result.as_dict()
     elapsed_ms = round((time.monotonic() - start) * 1000, 1)
 
     metadata = result.get("search_metadata", {}) or {}
