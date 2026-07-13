@@ -1163,6 +1163,15 @@ export default function Home() {
               {/* Tab 3: Local Guide */}
               {activeTab === 'guide' && (
                 <div className="space-y-6">
+                  
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-base mb-2">Currency & Exchange</h3>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-gray-700">
+                      {selectedDeal.currency_summary}
+                    </div>
+                  </div>
+                  {/* ---------------------------- */}
+
                   <div>
                     <h3 className="font-semibold text-gray-900 text-base mb-2">Airport & Hotel Transfers</h3>
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
