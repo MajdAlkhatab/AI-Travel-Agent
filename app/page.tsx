@@ -1000,17 +1000,21 @@ export default function Home() {
               >
                 Overview
               </button>
-              <button 
-                onClick={() => setActiveTab('daily_plan')} 
-                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
-              >
-                Daily Plan
-              </button>
+              
+              {/* Local Guide moved here */}
               <button 
                 onClick={() => setActiveTab('guide')} 
                 className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'guide' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
               >
                 Local Guide
+              </button>
+
+              {/* Daily Plan moved here */}
+              <button 
+                onClick={() => setActiveTab('daily_plan')} 
+                className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+              >
+                Daily Plan
               </button>
             </div>
 
