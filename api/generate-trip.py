@@ -19,6 +19,7 @@ from langchain.tools import tool
 from langchain.messages import HumanMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import StateGraph, START, END
+from langchain_core.runnables import RunnableConfig
 
 # --- 1. SETUP & INITIALIZATION ---
 load_dotenv()
@@ -267,29 +268,39 @@ async def node_trip_deals(state: TravelPlanState):
         "raw_hotel_response": raw_hotel_response,
     }
 
-async def node_transport(state: TravelPlanState):
+
+async def run_and_report_sub_agent(parent_node, sub_node_name, agent_coroutine, q):
+    result = await agent_coroutine
+    if q:
+        await q.put({"type": "status", "node": parent_node, "sub_node": sub_node_name})
+    return result
+
+async def node_transport(state: TravelPlanState, config: RunnableConfig):
+    q = config.get("configurable", {}).get("stream_queue")
+    
     hotel_name = state['hotel'].get('name', state['hotel_area']) if state.get('hotel') else state['hotel_area']
     loc = f"{hotel_name}, {state['destination']}"
-
     query = f"Airport: {state['flight']['arrival_airport_code']}\nDates: {state['start_date']}-{state['end_date']}\nHotel: {loc}\nCRITICAL: Convert and state all prices in {state['home_currency']}."
     
-    t_res, b_res, a_res = await asyncio.gather(
-        taxi_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
-        bus_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
-        app_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
-    )
+    taxi_task = run_and_report_sub_agent("transport", "taxi", taxi_executor.ainvoke({"messages": [HumanMessage(content=query)]}), q)
+    transit_task = run_and_report_sub_agent("transport", "transit", bus_executor.ainvoke({"messages": [HumanMessage(content=query)]}), q)
+    ride_task = run_and_report_sub_agent("transport", "ride_apps", app_executor.ainvoke({"messages": [HumanMessage(content=query)]}), q)
+    
+    t_res, b_res, a_res = await asyncio.gather(taxi_task, transit_task, ride_task)
 
     summary = f"Taxi: {t_res['messages'][-1].content}\nBus: {b_res['messages'][-1].content}\nApp: {a_res['messages'][-1].content}\nCRITICAL: Format all final output prices in {state['home_currency']}."
     final = await transport_main_agent.ainvoke({"messages": [HumanMessage(content=summary)]})
     return {"transport_summary": final["messages"][-1].content}
 
-async def node_activities(state: TravelPlanState):
+async def node_activities(state: TravelPlanState, config: RunnableConfig):
+    q = config.get("configurable", {}).get("stream_queue")
     query = f"Destination: {state['destination']}, {state['country']}\nDates: {state['start_date']} to {state['end_date']}\nCRITICAL: Convert and state all prices in {state['home_currency']}."
-    w_res, a_res, c_res = await asyncio.gather(
-        weather_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
-        activities_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
-        culture_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
-    )
+    
+    w_task = run_and_report_sub_agent("activities", "weather", weather_executor.ainvoke({"messages": [HumanMessage(content=query)]}), q)
+    a_task = run_and_report_sub_agent("activities", "todo", activities_executor.ainvoke({"messages": [HumanMessage(content=query)]}), q)
+    c_task = run_and_report_sub_agent("activities", "culture", culture_executor.ainvoke({"messages": [HumanMessage(content=query)]}), q)
+
+    w_res, a_res, c_res = await asyncio.gather(w_task, a_task, c_task)
 
     summary = f"Weather: {w_res['messages'][-1].content}\nActs: {a_res['messages'][-1].content}\nCulture: {c_res['messages'][-1].content}\nCRITICAL: Format any prices mentioned in {state['home_currency']}."
     final = await activity_main_agent.ainvoke({"messages": [HumanMessage(content=summary)]})
@@ -356,9 +367,6 @@ async def generate_trip(
     home_currency: str = "SEK",
     exclude_destinations: str = "",
 ):
-    """
-    Endpoint to trigger the LangGraph pipeline via SSE.
-    """
     inputs = {
         "departure_id": departure_id,
         "travelers": travelers,
@@ -368,28 +376,69 @@ async def generate_trip(
     }
     
     async def event_stream():
+        stream_queue = asyncio.Queue()
         current_state = inputs.copy()
-        try:
-            async for event in graph.astream(inputs):
-                for node_name, node_output in event.items():
-                    current_state.update(node_output)
-                    
-                    # Yield node status to frontend
-                    yield f"data: {json.dumps({'type': 'status', 'node': node_name})}\n\n"
-                    
-                    # If trip_deals failed to find a flight, stop early
-                    if node_name == "trip_deals" and not current_state.get("destination"):
-                        yield f"data: {json.dumps({'type': 'empty'})}\n\n"
-                        return
-                    
-                    # If synthesize is done, emit the complete payload
-                    if node_name == "synthesize":
-                        current_state["created_at"] = datetime.now(timezone.utc).isoformat()
-                        yield f"data: {json.dumps({'type': 'complete', 'data': current_state})}\n\n"
-                        
-        except Exception as e:
-            print(f"[generate-trip] EXCEPTION: {e!r}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
-    # StreamingResponse sends chunks in real-time
+        # Run the graph in the background so we can listen to the queue in real-time
+        async def run_graph():
+            try:
+                # Pass the queue into the graph via RunnableConfig
+                async for event in graph.astream(inputs, config={"configurable": {"stream_queue": stream_queue}}):
+                    for node_name, node_output in event.items():
+                        await stream_queue.put({"type": "node_complete", "node_name": node_name, "node_output": node_output})
+                await stream_queue.put({"type": "graph_done"})
+            except Exception as e:
+                print(f"[generate-trip] EXCEPTION: {e!r}")
+                await stream_queue.put({"type": "error", "message": str(e)})
+
+        # Start the background task
+        asyncio.create_task(run_graph())
+
+        # Listen to the queue and stream events to the React frontend
+        while True:
+            msg = await stream_queue.get()
+            
+            if msg["type"] == "graph_done":
+                break
+                
+            elif msg["type"] == "error":
+                yield f"data: {json.dumps({'type': 'error', 'message': msg['message']})}\n\n"
+                break
+                
+            elif msg["type"] == "status":
+                # This is our custom sub-agent event!
+                yield f"data: {json.dumps({'type': 'status', 'node': msg['node'], 'sub_node': msg['sub_node']})}\n\n"
+                
+            elif msg["type"] == "node_complete":
+                node_name = msg["node_name"]
+                current_state.update(msg["node_output"])
+                yield f"data: {json.dumps({'type': 'status', 'node': node_name})}\n\n"
+
+                if node_name == "trip_deals" and not current_state.get("destination"):
+                    yield f"data: {json.dumps({'type': 'empty'})}\n\n"
+                    break
+
+                if node_name == "synthesize":
+                    current_state["created_at"] = datetime.now(timezone.utc).isoformat()
+                    yield f"data: {json.dumps({'type': 'complete', 'data': current_state})}\n\n"
+                    break
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app.get("/api/cron-generate")
+async def cron_generate(
+    departure_id: str = "CPH", 
+    travelers: int = 2, 
+    duration: str = "2", 
+    home_currency: str = "SEK"
+):
+    inputs = {
+        "departure_id": departure_id,
+        "travelers": travelers,
+        "duration": duration, 
+        "home_currency": home_currency,
+        "exclude_destinations": []
+    }
+    # This runs the graph once and returns standard JSON, not a stream!
+    result = await graph.ainvoke(inputs)
+    return result
