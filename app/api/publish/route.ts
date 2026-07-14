@@ -35,8 +35,8 @@ export async function POST(request: Request) {
 
     console.log(`Starting Social Media Publish Sequence for ${imageUrls.length} images...`);
 
-    // --- STEP 0: STAMP THE PRICE BADGE ON FIRST IMAGE ---
-    if (economics && economics.totalSavingsPercent > 0) {
+    // --- STEP 0: STAMP THE EXACT FRONTEND UI BADGE ON FIRST IMAGE ---
+    if (economics && economics.totalCurrent != null) {
       try {
         console.log("Stamping first image with pricing badge...");
         
@@ -44,28 +44,109 @@ export async function POST(request: Request) {
         const fontRes = await fetch('https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlvAx05IsDqlA.ttf');
         const fontBuffer = await fontRes.arrayBuffer();
 
-        // Generate the transparent UI Overlay via Satori (added "as any" to bypass TS error)
+        // Check if there are savings to render the red/green tags, else just render total price
+        const hasSavings = economics.totalSavingsPercent > 0;
+
+        // Generate the transparent UI Overlay mimicking your Tailwind frontend
         const svg = await satori(
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-start', width: '100%', height: '100%', padding: '60px', fontFamily: 'Roboto' },
+              style: { 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', // Centers the badge horizontally
+                justifyContent: 'flex-start', // Pushes to the upper part
+                width: '100%', 
+                height: '100%', 
+                paddingTop: '120px', // Distance from the top edge
+                fontFamily: 'Roboto' 
+              },
               children: [
                 {
                   type: 'div',
                   props: {
-                    style: { display: 'flex', backgroundColor: '#c54249', color: 'white', fontSize: '44px', fontWeight: 700, padding: '12px 32px', borderRadius: '16px 16px 0 0', marginRight: '24px', marginBottom: '-1px' },
-                    children: `${economics.totalSavingsPercent}% RABATT`
-                  }
-                },
-                {
-                  type: 'div',
-                  props: {
-                    style: { display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.85)', padding: '32px 48px', borderRadius: '24px 0 24px 24px', border: '2px solid rgba(255,255,255,0.4)' },
-                    children: [
-                      { type: 'span', props: { style: { fontSize: '28px', fontWeight: 700, color: '#1f2937', letterSpacing: '2px', marginBottom: '8px' }, children: 'TOTALT PRIS' } },
-                      { type: 'span', props: { style: { fontSize: '84px', fontWeight: 700, color: '#111827', lineHeight: 1, marginBottom: '24px' }, children: `${economics.totalCurrent.toLocaleString('sv-SE')} kr` } },
-                      { type: 'div', props: { style: { display: 'flex', backgroundColor: '#86bda8', padding: '12px 24px', borderRadius: '16px' }, children: { type: 'span', props: { style: { fontSize: '36px', fontWeight: 700, color: '#064e3b' }, children: `Du sparar ${economics.totalSavings.toLocaleString('sv-SE')} kr` } } } }
+                    style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }, // Inner wrapper for alignment
+                    children: hasSavings ? [
+                      // Red Discount Badge (rounded-t-lg rounded-bl-lg, translate-y-1, drop-shadow)
+                      {
+                        type: 'div',
+                        props: {
+                          style: { 
+                            display: 'flex', 
+                            backgroundColor: 'rgba(239, 68, 68, 0.95)', 
+                            color: 'white', 
+                            fontSize: '32px', 
+                            fontWeight: 900, 
+                            textTransform: 'uppercase',
+                            letterSpacing: '4px',
+                            padding: '12px 32px', 
+                            borderRadius: '24px 24px 0 24px', 
+                            border: '2px solid rgba(248, 113, 113, 0.4)',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
+                            zIndex: 20, 
+                            marginBottom: '-16px' // Simulates the overlap / translate-y
+                          },
+                          children: `${economics.totalSavingsPercent}% RABATT`
+                        }
+                      },
+                      // Main Glass Box (bg-white/30, rounded-xl, items-end, shadow-xl)
+                      {
+                        type: 'div',
+                        props: {
+                          style: { 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'flex-end', 
+                            backgroundColor: 'rgba(255, 255, 255, 0.85)', // Slightly higher opacity to simulate lack of CSS blur
+                            padding: '40px 48px', 
+                            borderRadius: '32px', 
+                            border: '3px solid rgba(255, 255, 255, 0.6)',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+                            zIndex: 10
+                          },
+                          children: [
+                            { type: 'span', props: { style: { fontSize: '28px', color: '#111827', textTransform: 'uppercase', letterSpacing: '6px', fontWeight: 800, marginBottom: '8px' }, children: 'TOTALT PRIS' } },
+                            { type: 'span', props: { style: { fontSize: '110px', fontWeight: 900, color: '#111827', lineHeight: 1, marginBottom: '24px' }, children: `${economics.totalCurrent.toLocaleString('sv-SE')} kr` } },
+                            // Green Savings Box
+                            { 
+                              type: 'div', 
+                              props: { 
+                                style: { 
+                                  display: 'flex', 
+                                  backgroundColor: 'rgba(52, 211, 153, 0.35)', 
+                                  border: '2px solid rgba(110, 231, 183, 0.5)',
+                                  padding: '16px 32px', 
+                                  borderRadius: '16px' 
+                                }, 
+                                children: { type: 'span', props: { style: { fontSize: '32px', fontWeight: 800, color: '#022c22' }, children: `Du sparar ${economics.totalSavings.toLocaleString('sv-SE')} kr` } } 
+                              } 
+                            }
+                          ]
+                        }
+                      }
+                    ] : [
+                      // NO SAVINGS UI (Just the main box)
+                      {
+                        type: 'div',
+                        props: {
+                          style: { 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'flex-end', 
+                            backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                            padding: '40px 48px', 
+                            borderRadius: '32px', 
+                            border: '3px solid rgba(255, 255, 255, 0.6)',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+                            marginTop: '40px'
+                          },
+                          children: [
+                            { type: 'span', props: { style: { fontSize: '28px', color: '#111827', textTransform: 'uppercase', letterSpacing: '6px', fontWeight: 800, marginBottom: '8px' }, children: 'TOTALT PRIS' } },
+                            { type: 'span', props: { style: { fontSize: '110px', fontWeight: 900, color: '#111827', lineHeight: 1 }, children: `${economics.totalCurrent.toLocaleString('sv-SE')} kr` } }
+                          ]
+                        }
+                      }
                     ]
                   }
                 }
