@@ -76,13 +76,13 @@ def flexible_date_range(days_ahead=60):
     end = today + timedelta(days=days_ahead)
     return f"{tomorrow.isoformat()},{end.isoformat()}"
 
-def get_flight_deals(departure_id, outbound_date_range, travel_duration="1", currency="USD", gl="us", hl="en"):
+def get_flight_deals(departure_id, outbound_date_range, travel_duration="2", currency="USD", gl="us", hl="en"):
     params = {
         "engine": "google_flights_deals",
         "departure_id": departure_id,
         "outbound_date": outbound_date_range,
         "travel_duration": travel_duration,
-        "type": "3",  
+        "currency": currency,
         "gl": gl, "hl": hl,
     }
 
