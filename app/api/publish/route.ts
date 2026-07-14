@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         const fontRes = await fetch('https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlvAx05IsDqlA.ttf');
         const fontBuffer = await fontRes.arrayBuffer();
 
-        // Generate the transparent UI Overlay via Satori
+        // Generate the transparent UI Overlay via Satori (added "as any" to bypass TS error)
         const svg = await satori(
           {
             type: 'div',
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
                 }
               ]
             }
-          },
+          } as any,
           { width: 1080, height: 1080, fonts: [{ name: 'Roboto', data: fontBuffer, weight: 700, style: 'normal' }] }
         );
 
