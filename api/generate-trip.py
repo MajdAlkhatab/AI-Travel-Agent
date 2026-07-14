@@ -55,6 +55,7 @@ class TravelPlanState(TypedDict):
     start_date: str
     end_date: str
     hotel_area: str
+    destination_images: List[str]  # New field to hold the 5 destination images
 
     # Full, untouched SerpApi responses — kept alongside the curated fields
     # above so the raw payload (images, thumbnails, etc.) is preserved for
@@ -156,6 +157,34 @@ def get_best_hotel_area(city, country):
     print(f"[hotel-area] {city}, {country} -> {result.destination}")
     return result.destination
 
+def get_destination_images(query: str, max_images: int = 5) -> List[str]:
+    """Uses SerpApi Google Images engine to fetch top destination images."""
+    params = {
+        "engine": "google_images",
+        "q": query,
+        "gl": "us",
+        "hl": "en",
+    }
+    print(f"[image-search] requesting images for '{query}'")
+    try:
+        raw_result = serp_client.search(params)
+        result = raw_result.as_dict()
+        images_results = result.get("images_results", [])
+        
+        urls = []
+        for img in images_results:
+            original = img.get("original")
+            if original and isinstance(original, str):
+                urls.append(original)
+            if len(urls) >= max_images:
+                break
+                
+        print(f"[image-search] found {len(urls)} images")
+        return urls
+    except Exception as e:
+        print(f"[image-search] ERROR fetching images: {e}")
+        return []
+
 def hotel_discount_percent(hotel):
     match = re.search(r"(\d+)%", hotel.get("deal", ""))
     return int(match.group(1)) if match else 0
@@ -250,6 +279,11 @@ async def node_trip_deals(state: TravelPlanState):
     city, country = best_flight["name"], best_flight["country"]
     check_in, check_out = best_flight["outbound_date"], best_flight["return_date"]
     
+    # --- Fetch Destination Images ---
+    # Query for beautiful city imagery to populate our 5 destination photos
+    dest_query = f"{city} {country} tourism landmarks high quality"
+    destination_images = get_destination_images(dest_query, max_images=5)
+    
     hotel_area = get_best_hotel_area(city, country)
     raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
     hotels = raw_hotel_response.get("properties", [])
@@ -274,6 +308,7 @@ async def node_trip_deals(state: TravelPlanState):
         "start_date": check_in,
         "end_date": check_out,
         "hotel_area": hotel_area,
+        "destination_images": destination_images,
         "raw_flight_response": raw_flight_response,
         "raw_hotel_response": raw_hotel_response,
     }

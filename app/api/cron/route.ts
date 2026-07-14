@@ -116,11 +116,18 @@ export async function GET(request: Request) {
     // 6. TRIGGER SOCIAL MEDIA PUBLISHING (CAROUSEL)
     // ------------------------------------------------------------------
     try {
-      // ÄNDRING HÄR: Välj original_image i första hand för högre upplösning
-      const flightImage = curatedDeal.flight?.thumbnail;
+      // 50/50 split: up to 5 destination images + up to 5 high-res hotel images
+      let destinationImages = curatedDeal.destination_images || [];
+      if (destinationImages.length === 0 && curatedDeal.flight?.thumbnail) {
+        destinationImages.push(curatedDeal.flight.thumbnail);
+      }
+      
       const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.original_image || img.thumbnail) || [];
       
-      const imageUrls = [flightImage, ...hotelImages]
+      const topDestImages = destinationImages.slice(0, 5);
+      const topHotelImages = hotelImages.slice(0, 5);
+      
+      const imageUrls = [...topDestImages, ...topHotelImages]
         .filter((url): url is string => Boolean(url))
         .slice(0, 10);
       
