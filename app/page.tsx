@@ -604,21 +604,29 @@ export default function Home() {
     setTimeout(() => { if (runIdRef.current === runId) setPipelinePhase('flight'); }, 800);
 
     try {
+      const recentCountries = Array.from(
+        new Set(
+          deals
+            .slice(0, 7)
+            .map((d) => d?.country)
+            .filter(Boolean)
+        )
+      ).join(',');
+
       const query = `?${new URLSearchParams({
         departure_id: params.departureId,
         travelers: String(params.travelers),
         duration: params.duration,
         home_currency: params.homeCurrency,
+        exclude_destinations: recentCountries, 
       }).toString()}`;
       
       const response = await fetch(`/api/generate-trip${query}`);
       
-      // --- FIX 1: AUTO-DETECT PLAIN JSON RESPONSES ---
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const rawData = await response.json();
         
-        // Extract inner data block if wrapped, otherwise use raw
         const dealData = rawData.data || rawData;
 
         if (runIdRef.current !== runId) return;
