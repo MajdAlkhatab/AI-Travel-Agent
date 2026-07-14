@@ -8,7 +8,6 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization');
   const API_SECRET = process.env.API_SECRET_KEY;
 
-  // Ensure this endpoint can't be triggered by random public requests
   if (!API_SECRET || authHeader !== `Bearer ${API_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
   }
@@ -16,8 +15,6 @@ export async function POST(request: Request) {
   // --- 2. ENVIRONMENT VARIABLES ---
   const ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN;
   const FB_PAGE_ID = process.env.FACEBOOK_PAGE_ID;
-  
-  // Natively checks both possible variable names to prevent crashes
   const IG_ACCOUNT_ID = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_ACCOUNT_ID; 
 
   if (!ACCESS_TOKEN || !IG_ACCOUNT_ID || !FB_PAGE_ID) {
@@ -26,39 +23,91 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { imageUrl, caption } = body;
+    const { imageUrls, caption } = body;
 
-    if (!imageUrl || !caption) {
-      return NextResponse.json({ error: 'Missing imageUrl or caption in request body' }, { status: 400 });
+    if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0 || !caption) {
+      return NextResponse.json({ error: 'Missing imageUrls array or caption in request body' }, { status: 400 });
     }
 
-    console.log("Starting Social Media Publish Sequence...");
+    console.log(`Starting Social Media Publish Sequence for ${imageUrls.length} images...`);
 
-    // --- STEP A: POST TO FACEBOOK PAGE ---
-    const fbRes = await fetch(`https://graph.facebook.com/v25.0/${FB_PAGE_ID}/photos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: imageUrl,
-        message: caption,
-        access_token: ACCESS_TOKEN
-      })
-    });
-    const fbData = await fbRes.json();
-    
-    if (fbData.error) {
-      console.error("Facebook Publication Error Details:", fbData.error);
-    } else {
-      console.log(`Facebook Post created successfully. ID: ${fbData.id}`);
+    // --- STEP A: POST TO FACEBOOK PAGE (MULTI-PHOTO) ---
+    let fbPostId = null;
+    try {
+      const fbPhotoIds = [];
+      for (const url of imageUrls) {
+        const fbPhotoRes = await fetch(`https://graph.facebook.com/v25.0/${FB_PAGE_ID}/photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: url,
+            published: false, // Upload but keep hidden until feed post
+            access_token: ACCESS_TOKEN
+          })
+        });
+        const fbPhotoData = await fbPhotoRes.json();
+        
+        if (fbPhotoData.id) {
+          fbPhotoIds.push({ media_fbid: fbPhotoData.id });
+        }
+      }
+
+      if (fbPhotoIds.length > 0) {
+        const fbFeedRes = await fetch(`https://graph.facebook.com/v25.0/${FB_PAGE_ID}/feed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: caption,
+            attached_media: fbPhotoIds,
+            access_token: ACCESS_TOKEN
+          })
+        });
+        const fbFeedData = await fbFeedRes.json();
+        
+        if (fbFeedData.error) {
+          console.error("Facebook Feed Publish Error Details:", fbFeedData.error);
+        } else {
+          fbPostId = fbFeedData.id;
+          console.log(`Facebook Multi-Photo Post created successfully. ID: ${fbPostId}`);
+        }
+      }
+    } catch (fbErr) {
+      console.error("Facebook Process Error:", fbErr);
     }
 
-    // --- STEP B: CREATE INSTAGRAM CONTAINER ---
+    // --- STEP B: CREATE INSTAGRAM CAROUSEL ITEMS ---
+    const igItemIds = [];
+    for (const url of imageUrls) {
+      const igItemRes = await fetch(`https://graph.facebook.com/v25.0/${IG_ACCOUNT_ID}/media`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_url: url,
+          is_carousel_item: true, // Tells Meta this is 1 slide of a carousel
+          access_token: ACCESS_TOKEN
+        })
+      });
+      const igItemData = await igItemRes.json();
+      
+      if (igItemData.id) {
+        igItemIds.push(igItemData.id);
+      } else if (igItemData.error) {
+        console.error("IG Item Creation Error:", igItemData.error);
+      }
+    }
+
+    if (igItemIds.length === 0) {
+      throw new Error("Failed to create any Instagram carousel items.");
+    }
+
+    // --- STEP C: CREATE INSTAGRAM CAROUSEL CONTAINER ---
     const igContainerRes = await fetch(`https://graph.facebook.com/v25.0/${IG_ACCOUNT_ID}/media`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        image_url: imageUrl,
+        media_type: 'CAROUSEL',
         caption: caption,
+        children: igItemIds.join(','),
         access_token: ACCESS_TOKEN
       })
     });
@@ -69,13 +118,13 @@ export async function POST(request: Request) {
     }
 
     const creationId = igContainerData.id;
-    console.log(`IG Container created successfully. ID: ${creationId}`);
+    console.log(`IG Carousel Container created successfully. ID: ${creationId}`);
 
-    // --- STEP C: SAFETY DELAY ---
-    // Give Meta's servers 3 seconds to fully download and process the image dimensions
-    await delay(3000); 
+    // --- STEP D: SAFETY DELAY ---
+    // Give Meta's servers extra time to process all images before pushing live
+    await delay(5000); 
 
-    // --- STEP D: PUBLISH INSTAGRAM CONTAINER ---
+    // --- STEP E: PUBLISH INSTAGRAM CAROUSEL ---
     const igPublishRes = await fetch(`https://graph.facebook.com/v25.0/${IG_ACCOUNT_ID}/media_publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -90,12 +139,12 @@ export async function POST(request: Request) {
       throw new Error(`IG Publish Error: ${igPublishData.error.message}`);
     }
 
-    console.log(`Successfully published to Instagram! Post ID: ${igPublishData.id}`);
+    console.log(`Successfully published Carousel to Instagram! Post ID: ${igPublishData.id}`);
     
     return NextResponse.json({ 
       success: true, 
-      message: 'Successfully posted to Facebook and Instagram!', 
-      facebookPostId: fbData.id || null,
+      message: 'Successfully posted Carousel to Facebook and Instagram!', 
+      facebookPostId: fbPostId,
       instagramPostId: igPublishData.id 
     });
 

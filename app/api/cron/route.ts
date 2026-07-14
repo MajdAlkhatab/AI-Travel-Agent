@@ -14,7 +14,6 @@ export async function GET(request: Request) {
     const travelers = searchParams.get('travelers') || randomTravelers;
     const duration = searchParams.get('duration') || randomDuration;
     const homeCurrency = searchParams.get('home_currency') || 'SEK';
-    // ----------------------------
 
     // 1. Fetch existing deals FIRST
     let existingDeals: any[] = [];
@@ -114,19 +113,22 @@ export async function GET(request: Request) {
     });
 
     // ------------------------------------------------------------------
-    // 6. TRIGGER SOCIAL MEDIA PUBLISHING (NEW)
+    // 6. TRIGGER SOCIAL MEDIA PUBLISHING (CAROUSEL)
     // ------------------------------------------------------------------
     try {
-      const heroImage = curatedDeal.flight?.thumbnail || curatedDeal.hotel?.images?.[0]?.thumbnail;
+      const flightImage = curatedDeal.flight?.thumbnail;
+      const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.thumbnail) || [];
       
-      if (heroImage) {
-        // Construct a clean, emoji-filled caption using the AI's data
+      const imageUrls = [flightImage, ...hotelImages]
+        .filter((url): url is string => Boolean(url))
+        .slice(0, 10);
+      
+      if (imageUrls.length > 0) {
         const socialCaption = `🔥 New Deal Alert: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flights & Hotel found.\n\nHere is the vibe:\n${curatedDeal.activity_summary}\n\nLink in bio to see the full itinerary and book before prices change! 🌍✨`;
         
         const publishUrl = `${protocol}://${host}/api/publish`;
-        console.log("Triggering Social Media Publish at:", publishUrl);
+        console.log("Triggering Carousel Social Media Publish at:", publishUrl);
         
-        // Call your new /api/publish route securely
         const publishRes = await fetch(publishUrl, {
           method: 'POST',
           headers: {
@@ -134,7 +136,7 @@ export async function GET(request: Request) {
             'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
           },
           body: JSON.stringify({
-            imageUrl: heroImage,
+            imageUrls: imageUrls,
             caption: socialCaption
           })
         });
@@ -143,11 +145,8 @@ export async function GET(request: Request) {
         console.log("Publish Route Response:", publishData);
       }
     } catch (publishErr) {
-      // If publishing fails, we just log it. We don't crash the cron job, 
-      // because the deal was already successfully saved to the website.
       console.error("Failed to trigger social media publish:", publishErr);
     }
-    // ------------------------------------------------------------------
 
     return NextResponse.json({
       success: true,

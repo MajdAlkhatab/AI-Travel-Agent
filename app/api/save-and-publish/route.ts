@@ -27,18 +27,24 @@ export async function POST(request: Request) {
       contentType: 'application/json'
     });
 
-    // 2. Trigger your secure Instagram/Facebook cross-poster
-    const heroImage = curatedDeal.flight?.thumbnail || curatedDeal.hotel?.images?.[0]?.thumbnail;
+    // 2. Extract multiple images for Carousel (Max 10 for Instagram)
+    const flightImage = curatedDeal.flight?.thumbnail;
+    const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.thumbnail) || [];
     
-    if (heroImage && process.env.API_SECRET_KEY) {
-      // --- PHASE 3: SWEDISH TRANSLATION FOR SOCIAL MEDIA CAPTION ---
+    const imageUrls = [flightImage, ...hotelImages]
+      .filter((url): url is string => Boolean(url))
+      .slice(0, 10);
+
+    // 3. Trigger your secure Instagram/Facebook cross-poster
+    if (imageUrls.length > 0 && process.env.API_SECRET_KEY) {
+      // --- SWEDISH TRANSLATION FOR SOCIAL MEDIA CAPTION ---
       const socialCaption = `🔥 Nytt supererbjudande: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flyg & hotell säkrat.\n\nSå här är stämningen:\n${curatedDeal.activity_summary}\n\nLänk i bion för att se hela resplanen och boka innan priserna ändras! 🌍✨`;
       
       const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
       const host = request.headers.get('host');
       const publishUrl = `${protocol}://${host}/api/publish`;
 
-      console.log("Triggering Social Media for manual hunt at:", publishUrl);
+      console.log("Triggering Carousel Social Media for manual hunt at:", publishUrl);
 
       await fetch(publishUrl, {
         method: 'POST',
@@ -47,7 +53,7 @@ export async function POST(request: Request) {
           'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
         },
         body: JSON.stringify({
-          imageUrl: heroImage,
+          imageUrls: imageUrls,
           caption: socialCaption
         })
       });
