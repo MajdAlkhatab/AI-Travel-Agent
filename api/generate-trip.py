@@ -113,7 +113,7 @@ def get_flight_deals(departure_id, outbound_date_range, travel_duration="1", cur
     print(f"[flight-search] departure_id={departure_id} returned {len(deals)} raw deals")
     return result
 
-def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, currency="USD", gl="us", hl="en"):
+def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, currency="USD", gl="us", hl="en", special_offers="true"):
     params = {
         "engine": "google_hotels",
         "q": f"{destination} hotels",
@@ -122,10 +122,10 @@ def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, curren
         "adults": adults,
         "currency": currency,
         "gl": gl, "hl": hl,
-        "special_offers": "true",
+        "special_offers": special_offers,
     }
 
-    print(f"[hotel-search] request q='{destination} hotels' check_in={check_in_date} check_out={check_out_date} adults={adults}")
+    print(f"[hotel-search] request q='{destination} hotels' check_in={check_in_date} check_out={check_out_date} adults={adults} special_offers={special_offers}")
 
     start = time.monotonic()
     raw_result = serp_client.search(params)
@@ -252,6 +252,16 @@ async def node_trip_deals(state: TravelPlanState):
     hotel_area = get_best_hotel_area(city, country)
     raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
     hotels = raw_hotel_response.get("properties", [])
+    
+    # --- ADDED FALLBACK ---
+    if not hotels:
+        print(f"[trip-deals] No special offers found for {city}. Trying without filter...")
+        raw_hotel_response = get_hotel_deals(
+            f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"], special_offers="false"
+        )
+        hotels = raw_hotel_response.get("properties", [])
+    # ----------------------
+    
     best_hotel = max(hotels, key=hotel_discount_percent) if hotels else None
     print(f"[trip-deals] FINAL: {city}, {country} | hotel={'yes' if best_hotel else 'none found'}")
     
