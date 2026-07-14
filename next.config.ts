@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Tells Next.js not to bundle native binaries, fixing the Turbopack build error
+  serverExternalPackages: ['@resvg/resvg-js', 'sharp'],
 };
 
 export default nextConfig;
