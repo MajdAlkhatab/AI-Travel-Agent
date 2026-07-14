@@ -82,7 +82,7 @@ def get_flight_deals(departure_id, outbound_date_range, travel_duration="1", cur
         "departure_id": departure_id,
         "outbound_date": outbound_date_range,
         "travel_duration": travel_duration,
-        "currency": currency,
+        "type": "3",  
         "gl": gl, "hl": hl,
     }
 
