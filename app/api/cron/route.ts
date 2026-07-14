@@ -4,10 +4,17 @@ import { put, list } from '@vercel/blob';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const departureId = searchParams.get('departure_id') || 'CPH';
-    const travelers = searchParams.get('travelers') || '2';
-    const duration = searchParams.get('duration') || '2';
+
+    const airports = ['ARN', 'GOT', 'CPH'];
+    const randomAirport = airports[Math.floor(Math.random() * airports.length)];
+    const randomTravelers = Math.random() > 0.5 ? '1' : '2'; 
+    const randomDuration = Math.random() > 0.5 ? '2' : '1'; 
+
+    const departureId = searchParams.get('departure_id') || randomAirport;
+    const travelers = searchParams.get('travelers') || randomTravelers;
+    const duration = searchParams.get('duration') || randomDuration;
     const homeCurrency = searchParams.get('home_currency') || 'SEK';
+    // ----------------------------
 
     // 1. Fetch existing deals FIRST
     let existingDeals: any[] = [];
