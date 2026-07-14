@@ -81,7 +81,7 @@ export async function POST(request: Request) {
                           border: '3px solid rgba(255, 255, 255, 0.8)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', marginTop: hasSavings ? '32px' : '0' 
                         },
                         children: [
-                          { type: 'span', props: { style: { fontSize: '32px', color: '#1f2937', textTransform: 'uppercase', letterSpacing: '6px', fontWeight: 800, marginBottom: '16px' }, children: 'TOTALT PRIS' } },
+                          { type: 'span', props: { style: { fontSize: '32px', color: '#1f2937', textTransform: 'uppercase', letterSpacing: '6px', fontWeight: 800, marginBottom: '16px' }, children: 'FLYG & HOTELL' } },
                           { type: 'span', props: { style: { fontSize: '120px', fontWeight: 900, color: '#111827', lineHeight: 1, marginBottom: hasSavings ? '32px' : '0' }, children: `${economics.totalCurrent.toLocaleString('sv-SE')} kr` } },
                           hasSavings ? { 
                             type: 'div', 
@@ -160,8 +160,7 @@ export async function POST(request: Request) {
                 props: {
                   style: { display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.85)', padding: '40px 60px', borderRadius: '32px', border: '3px solid rgba(255, 255, 255, 0.6)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' },
                   children: [
-                    { type: 'span', props: { style: { fontSize: '90px', fontWeight: 900, color: '#111827', marginBottom: '16px' }, children: `${tripDetails.temperature}` } },
-                    { type: 'span', props: { style: { fontSize: '40px', fontWeight: 700, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '2px' }, children: `TUR OCH RETUR` } }
+                    { type: 'span', props: { style: { fontSize: '90px', fontWeight: 900, color: '#111827' }, children: `${tripDetails.temperature}` } }
                   ]
                 }
               }
