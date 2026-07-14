@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/api/generate-trip",
+      "destination": "/app.py"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron",
