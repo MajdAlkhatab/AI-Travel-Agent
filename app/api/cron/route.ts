@@ -141,14 +141,12 @@ export async function GET(request: Request) {
     // 6. TRIGGER SOCIAL MEDIA PUBLISHING (CAROUSEL)
     // ------------------------------------------------------------------
     try {
-      // 50/50 split: up to 5 destination images + up to 5 high-res hotel images
       let destinationImages = curatedDeal.destination_images || [];
       if (destinationImages.length === 0 && curatedDeal.flight?.thumbnail) {
         destinationImages.push(curatedDeal.flight.thumbnail);
       }
       
       const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.original_image || img.thumbnail) || [];
-      
       const topDestImages = destinationImages.slice(0, 5);
       const topHotelImages = hotelImages.slice(0, 5);
       
@@ -159,6 +157,25 @@ export async function GET(request: Request) {
       if (imageUrls.length > 0) {
         const socialCaption = `🔥 New Deal Alert: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flights & Hotel found.\n\nHere is the vibe:\n${curatedDeal.activity_summary}\n\nLink in bio to see the full itinerary and book before prices change! 🌍✨`;
         const economics = getDealEconomics(curatedDeal);
+        
+        // Extract specific details for images 2 and 3
+        const s = new Date(curatedDeal.start_date).getTime();
+        const e = new Date(curatedDeal.end_date).getTime();
+        const nights = Math.round((e - s) / (1000 * 60 * 60 * 24)) || 2;
+        
+        let tempStr = '22°C'; 
+        if (curatedDeal.activity_summary) {
+          const m = curatedDeal.activity_summary.match(/(\d+\s*(?:°C|grader))/i);
+          if (m) tempStr = m[1].replace(/grader/i, '°C').replace(' ', '');
+        }
+
+        const tripDetails = {
+          travelers: curatedDeal.travelers || 2,
+          nights: nights,
+          depAirport: curatedDeal.flight?.departure_airport_code || 'ARN',
+          arrAirport: curatedDeal.flight?.arrival_airport_code || 'DEST',
+          temperature: tempStr
+        };
         
         const publishUrl = `${protocol}://${host}/api/publish`;
         console.log("Triggering Carousel Social Media Publish at:", publishUrl);
@@ -172,7 +189,8 @@ export async function GET(request: Request) {
           body: JSON.stringify({
             imageUrls: imageUrls,
             caption: socialCaption,
-            economics: economics
+            economics: economics,
+            tripDetails: tripDetails
           })
         });
         
