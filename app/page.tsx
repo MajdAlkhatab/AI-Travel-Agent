@@ -812,33 +812,33 @@ export default function Home() {
 
                     {econ.hasSavings ? (
                       <div className="absolute top-12 right-4 z-10 flex flex-col items-end">
-                        {/* 1. Procentuell Rabatt (Gjort aningen mjukare men fortfarande tydlig) */}
+                        {/* 1. Procentuell Rabatt (Mer transparent glas-röd) */}
                         {econ.totalSavingsPercent != null && (
-                          <div className="bg-red-600/90 backdrop-blur-sm text-white text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-t-lg rounded-bl-lg shadow-md z-20 translate-y-1 border border-red-500/50">
+                          <div className="bg-red-600/80 backdrop-blur-md text-white text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-t-lg rounded-bl-lg shadow-md z-20 translate-y-1 border border-red-400/40">
                             {econ.totalSavingsPercent}% Rabatt
                           </div>
                         )}
                         
-                        {/* 2 & 3. Huvudkortet med "Glassmorphism" (Frostad glaseffekt) */}
-                        <div className="bg-white/60 backdrop-blur-md rounded-xl p-3 shadow-xl border border-white/50 flex flex-col items-end z-10">
-                          <div className="text-[9px] text-gray-800 uppercase tracking-widest font-bold mb-0.5 drop-shadow-sm">
+                        {/* 2 & 3. Huvudkortet med extra genomskinligt glas (bg-white/30) */}
+                        <div className="bg-white/30 backdrop-blur-md rounded-xl p-3 shadow-xl border border-white/40 flex flex-col items-end z-10">
+                          <div className="text-[9px] text-gray-900 uppercase tracking-widest font-extrabold mb-0.5 drop-shadow-md">
                             Totalt pris
                           </div>
-                          <div className="text-2xl font-black text-gray-900 leading-none mb-2 drop-shadow-sm">
+                          <div className="text-2xl font-black text-gray-900 leading-none mb-2 drop-shadow-md">
                             {formatPrice(econ.totalCurrent!, displayCurrency, latestRates)}
                           </div>
-                          {/* Genomskinlig grön badge */}
-                          <div className="bg-emerald-500/20 backdrop-blur-sm text-emerald-900 text-[11px] font-bold px-2 py-1 rounded-md border border-emerald-500/30">
+                          {/* Ännu mer genomskinlig grön badge */}
+                          <div className="bg-emerald-400/15 backdrop-blur-md text-emerald-950 text-[11px] font-extrabold px-2 py-1 rounded-md border border-emerald-300/30 drop-shadow-sm">
                             Du sparar {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
                           </div>
                         </div>
                       </div>
                     ) : econ.totalCurrent != null ? (
-                      <div className="absolute top-14 right-4 z-10 bg-white/60 backdrop-blur-md rounded-xl p-3 shadow-xl border border-white/50 flex flex-col items-end">
-                        <div className="text-[9px] text-gray-800 uppercase tracking-widest font-bold mb-0.5 drop-shadow-sm">
+                      <div className="absolute top-14 right-4 z-10 bg-white/30 backdrop-blur-md rounded-xl p-3 shadow-xl border border-white/40 flex flex-col items-end">
+                        <div className="text-[9px] text-gray-900 uppercase tracking-widest font-extrabold mb-0.5 drop-shadow-md">
                           Totalt pris
                         </div>
-                        <div className="text-2xl font-black text-gray-900 leading-none drop-shadow-sm">
+                        <div className="text-2xl font-black text-gray-900 leading-none drop-shadow-md">
                           {formatPrice(econ.totalCurrent, displayCurrency, latestRates)}
                         </div>
                       </div>
