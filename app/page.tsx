@@ -813,7 +813,7 @@ export default function Home() {
                     {econ.hasSavings ? (
                       <div className="absolute top-12 right-4 z-10 flex flex-col items-end">
                         {econ.totalSavingsPercent != null && (
-                          <div className="bg-red-500/40 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-t-lg rounded-bl-lg shadow-sm z-20 translate-y-1 border border-red-400/30 drop-shadow-md">
+                          <div className="bg-red-500/70 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-t-lg rounded-bl-lg shadow-sm z-20 translate-y-1 border border-red-400/30 drop-shadow-md">
                             {econ.totalSavingsPercent}% Rabatt
                           </div>
                         )}
