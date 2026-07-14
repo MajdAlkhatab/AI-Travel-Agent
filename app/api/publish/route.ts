@@ -40,11 +40,14 @@ export async function POST(request: Request) {
       try {
         console.log("Stamping first image with pricing badge...");
         
+        // Extract Location from Caption automatically (e.g., "Paris, Frankrike")
+        const locationMatch = caption.match(/🔥 Nytt supererbjudande:\s*(.*?)\s*!/);
+        const locationText = locationMatch ? locationMatch[1].toUpperCase() : '';
+
         // Load font for rendering text
         const fontRes = await fetch('https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlvAx05IsDqlA.ttf');
         const fontBuffer = await fontRes.arrayBuffer();
 
-        // Check if there are savings to render the red/green tags, else just render total price
         const hasSavings = economics.totalSavingsPercent > 0;
 
         // Generate the transparent UI Overlay mimicking your Tailwind frontend
@@ -53,104 +56,75 @@ export async function POST(request: Request) {
             type: 'div',
             props: {
               style: { 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', // Centers the badge horizontally
-                justifyContent: 'flex-start', // Pushes to the upper part
-                width: '100%', 
-                height: '100%', 
-                paddingTop: '120px', // Distance from the top edge
-                fontFamily: 'Roboto' 
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', 
+                width: '100%', height: '100%', paddingTop: '160px', fontFamily: 'Roboto' 
               },
               children: [
                 {
                   type: 'div',
                   props: {
-                    style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }, // Inner wrapper for alignment
-                    children: hasSavings ? [
-                      // Red Discount Badge (rounded-t-lg rounded-bl-lg, translate-y-1, drop-shadow)
+                    style: { display: 'flex', position: 'relative', flexDirection: 'column' }, 
+                    children: [
+                      // 1. MAIN WHITE BOX (Renders first, so it sits in the background)
                       {
                         type: 'div',
                         props: {
                           style: { 
-                            display: 'flex', 
-                            backgroundColor: 'rgba(239, 68, 68, 0.95)', 
-                            color: 'white', 
-                            fontSize: '32px', 
-                            fontWeight: 900, 
-                            textTransform: 'uppercase',
-                            letterSpacing: '4px',
-                            padding: '12px 32px', 
-                            borderRadius: '24px 24px 0 24px', 
-                            border: '2px solid rgba(248, 113, 113, 0.4)',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
-                            zIndex: 20, 
-                            marginBottom: '-16px' // Simulates the overlap / translate-y
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', 
+                            backgroundColor: 'rgba(240, 243, 245, 0.95)', // Solid frosted look
+                            padding: '48px 64px', borderRadius: '32px', 
+                            border: '3px solid rgba(255, 255, 255, 0.8)',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                            marginTop: hasSavings ? '32px' : '0' // Pushes down to make room for absolute red box
+                          },
+                          children: [
+                            { type: 'span', props: { style: { fontSize: '32px', color: '#1f2937', textTransform: 'uppercase', letterSpacing: '6px', fontWeight: 800, marginBottom: '16px' }, children: 'TOTALT PRIS' } },
+                            { type: 'span', props: { style: { fontSize: '120px', fontWeight: 900, color: '#111827', lineHeight: 1, marginBottom: hasSavings ? '32px' : '0' }, children: `${economics.totalCurrent.toLocaleString('sv-SE')} kr` } },
+                            hasSavings ? { 
+                              type: 'div', 
+                              props: { 
+                                style: { display: 'flex', backgroundColor: 'rgba(52, 211, 153, 0.4)', border: '2px solid rgba(110, 231, 183, 0.6)', padding: '16px 36px', borderRadius: '16px' }, 
+                                children: { type: 'span', props: { style: { fontSize: '36px', fontWeight: 800, color: '#022c22' }, children: `Du sparar ${economics.totalSavings.toLocaleString('sv-SE')} kr` } } 
+                              } 
+                            } : null
+                          ].filter(Boolean)
+                        }
+                      },
+                      // 2. RED DISCOUNT BADGE (Renders second, absolute position forces it ON TOP)
+                      hasSavings ? {
+                        type: 'div',
+                        props: {
+                          style: { 
+                            position: 'absolute', top: 0, right: '40px',
+                            display: 'flex', backgroundColor: '#d9534f', color: 'white', 
+                            fontSize: '36px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '4px',
+                            padding: '16px 40px', borderRadius: '24px 24px 0 24px', 
+                            border: '2px solid rgba(255, 255, 255, 0.2)',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
                           },
                           children: `${economics.totalSavingsPercent}% RABATT`
                         }
-                      },
-                      // Main Glass Box (bg-white/30, rounded-xl, items-end, shadow-xl)
-                      {
-                        type: 'div',
-                        props: {
-                          style: { 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            alignItems: 'flex-end', 
-                            backgroundColor: 'rgba(255, 255, 255, 0.85)', // Slightly higher opacity to simulate lack of CSS blur
-                            padding: '40px 48px', 
-                            borderRadius: '32px', 
-                            border: '3px solid rgba(255, 255, 255, 0.6)',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-                            zIndex: 10
-                          },
-                          children: [
-                            { type: 'span', props: { style: { fontSize: '28px', color: '#111827', textTransform: 'uppercase', letterSpacing: '6px', fontWeight: 800, marginBottom: '8px' }, children: 'TOTALT PRIS' } },
-                            { type: 'span', props: { style: { fontSize: '110px', fontWeight: 900, color: '#111827', lineHeight: 1, marginBottom: '24px' }, children: `${economics.totalCurrent.toLocaleString('sv-SE')} kr` } },
-                            // Green Savings Box
-                            { 
-                              type: 'div', 
-                              props: { 
-                                style: { 
-                                  display: 'flex', 
-                                  backgroundColor: 'rgba(52, 211, 153, 0.35)', 
-                                  border: '2px solid rgba(110, 231, 183, 0.5)',
-                                  padding: '16px 32px', 
-                                  borderRadius: '16px' 
-                                }, 
-                                children: { type: 'span', props: { style: { fontSize: '32px', fontWeight: 800, color: '#022c22' }, children: `Du sparar ${economics.totalSavings.toLocaleString('sv-SE')} kr` } } 
-                              } 
-                            }
-                          ]
-                        }
-                      }
-                    ] : [
-                      // NO SAVINGS UI (Just the main box)
-                      {
-                        type: 'div',
-                        props: {
-                          style: { 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            alignItems: 'flex-end', 
-                            backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                            padding: '40px 48px', 
-                            borderRadius: '32px', 
-                            border: '3px solid rgba(255, 255, 255, 0.6)',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-                            marginTop: '40px'
-                          },
-                          children: [
-                            { type: 'span', props: { style: { fontSize: '28px', color: '#111827', textTransform: 'uppercase', letterSpacing: '6px', fontWeight: 800, marginBottom: '8px' }, children: 'TOTALT PRIS' } },
-                            { type: 'span', props: { style: { fontSize: '110px', fontWeight: 900, color: '#111827', lineHeight: 1 }, children: `${economics.totalCurrent.toLocaleString('sv-SE')} kr` } }
-                          ]
-                        }
-                      }
-                    ]
+                      } : null
+                    ].filter(Boolean)
                   }
-                }
-              ]
+                },
+                // 3. LOCATION TEXT (Plain white, heavy drop shadow, under the box)
+                locationText ? {
+                  type: 'div',
+                  props: {
+                    style: {
+                      marginTop: '40px',
+                      color: 'white',
+                      fontSize: '52px',
+                      fontWeight: 900,
+                      textTransform: 'uppercase',
+                      letterSpacing: '2px',
+                      textShadow: '0px 4px 16px rgba(0,0,0,0.9), 0px 2px 4px rgba(0,0,0,1)'
+                    },
+                    children: locationText
+                  }
+                } : null
+              ].filter(Boolean)
             }
           } as any,
           { width: 1080, height: 1080, fonts: [{ name: 'Roboto', data: fontBuffer, weight: 700, style: 'normal' }] }
@@ -164,11 +138,11 @@ export async function POST(request: Request) {
         const firstImageRes = await fetch(imageUrls[0]);
         const firstImageBuffer = await firstImageRes.arrayBuffer();
 
-        // Composite the PNG overlay onto the Background Image
+        // Composite the PNG overlay onto the Background Image with Maximum Quality Settings
         const composited = await sharp(Buffer.from(firstImageBuffer))
-          .resize(1080, 1080, { fit: 'cover' })
+          .resize(1080, 1080, { fit: 'cover', kernel: 'lanczos3' }) // High quality resizing
           .composite([{ input: pngData, gravity: 'center' }])
-          .jpeg({ quality: 90 })
+          .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Prevents color bleeding/compression
           .toBuffer();
 
         // Upload to Vercel Blob and replace the URL in the array
