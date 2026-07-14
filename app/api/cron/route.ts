@@ -1,6 +1,31 @@
 import { NextResponse } from 'next/server';
 import { put, list } from '@vercel/blob';
 
+function getDealEconomics(deal: any) {
+  const flightCurrent = deal.flight?.price || 0;
+  const hotelTotalCurrent = deal.hotel?.total_rate?.extracted_lowest || 0;
+  const totalCurrent = flightCurrent + hotelTotalCurrent;
+
+  let hotelPct = 0;
+  if (deal.hotel?.deal) {
+    const match = deal.hotel.deal.match(/(\d+)\s*%/);
+    if (match) hotelPct = parseInt(match[1], 10);
+  }
+  const hotelTotalOriginal = (hotelTotalCurrent && hotelPct > 0) ? hotelTotalCurrent / (1 - hotelPct / 100) : hotelTotalCurrent;
+  const flightOriginal = deal.flight?.average_price || flightCurrent;
+  const totalOriginal = flightOriginal + hotelTotalOriginal;
+
+  const totalSavings = totalOriginal > totalCurrent ? totalOriginal - totalCurrent : 0;
+  const totalSavingsPercent = totalSavings > 0 ? Math.round((totalSavings / totalOriginal) * 100) : 0;
+
+  const rate = deal.exchange_rates?.SEK || 10.5;
+  return {
+    totalCurrent: Math.round(totalCurrent * rate),
+    totalSavings: Math.round(totalSavings * rate),
+    totalSavingsPercent
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -133,6 +158,7 @@ export async function GET(request: Request) {
       
       if (imageUrls.length > 0) {
         const socialCaption = `🔥 New Deal Alert: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flights & Hotel found.\n\nHere is the vibe:\n${curatedDeal.activity_summary}\n\nLink in bio to see the full itinerary and book before prices change! 🌍✨`;
+        const economics = getDealEconomics(curatedDeal);
         
         const publishUrl = `${protocol}://${host}/api/publish`;
         console.log("Triggering Carousel Social Media Publish at:", publishUrl);
@@ -145,7 +171,8 @@ export async function GET(request: Request) {
           },
           body: JSON.stringify({
             imageUrls: imageUrls,
-            caption: socialCaption
+            caption: socialCaption,
+            economics: economics
           })
         });
         

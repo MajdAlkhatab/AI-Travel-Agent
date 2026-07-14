@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import { put } from '@vercel/blob';
+import satori from 'satori';
+import { Resvg } from '@resvg/resvg-js';
+import sharp from 'sharp';
 
 // Helper function to create a small safety delay for Meta's servers
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -23,13 +27,78 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { imageUrls, caption } = body;
+    const { imageUrls, caption, economics } = body;
 
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0 || !caption) {
       return NextResponse.json({ error: 'Missing imageUrls array or caption in request body' }, { status: 400 });
     }
 
     console.log(`Starting Social Media Publish Sequence for ${imageUrls.length} images...`);
+
+    // --- STEP 0: STAMP THE PRICE BADGE ON FIRST IMAGE ---
+    if (economics && economics.totalSavingsPercent > 0) {
+      try {
+        console.log("Stamping first image with pricing badge...");
+        
+        // Load font for rendering text
+        const fontRes = await fetch('https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlvAx05IsDqlA.ttf');
+        const fontBuffer = await fontRes.arrayBuffer();
+
+        // Generate the transparent UI Overlay via Satori
+        const svg = await satori(
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-start', width: '100%', height: '100%', padding: '60px', fontFamily: 'Roboto' },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    style: { display: 'flex', backgroundColor: '#c54249', color: 'white', fontSize: '44px', fontWeight: 700, padding: '12px 32px', borderRadius: '16px 16px 0 0', marginRight: '24px', marginBottom: '-1px' },
+                    children: `${economics.totalSavingsPercent}% RABATT`
+                  }
+                },
+                {
+                  type: 'div',
+                  props: {
+                    style: { display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.85)', padding: '32px 48px', borderRadius: '24px 0 24px 24px', border: '2px solid rgba(255,255,255,0.4)' },
+                    children: [
+                      { type: 'span', props: { style: { fontSize: '28px', fontWeight: 700, color: '#1f2937', letterSpacing: '2px', marginBottom: '8px' }, children: 'TOTALT PRIS' } },
+                      { type: 'span', props: { style: { fontSize: '84px', fontWeight: 700, color: '#111827', lineHeight: 1, marginBottom: '24px' }, children: `${economics.totalCurrent.toLocaleString('sv-SE')} kr` } },
+                      { type: 'div', props: { style: { display: 'flex', backgroundColor: '#86bda8', padding: '12px 24px', borderRadius: '16px' }, children: { type: 'span', props: { style: { fontSize: '36px', fontWeight: 700, color: '#064e3b' }, children: `Du sparar ${economics.totalSavings.toLocaleString('sv-SE')} kr` } } } }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          { width: 1080, height: 1080, fonts: [{ name: 'Roboto', data: fontBuffer, weight: 700, style: 'normal' }] }
+        );
+
+        // Convert SVG to PNG
+        const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1080 } });
+        const pngData = resvg.render().asPng();
+
+        // Download the raw first destination image
+        const firstImageRes = await fetch(imageUrls[0]);
+        const firstImageBuffer = await firstImageRes.arrayBuffer();
+
+        // Composite the PNG overlay onto the Background Image
+        const composited = await sharp(Buffer.from(firstImageBuffer))
+          .resize(1080, 1080, { fit: 'cover' })
+          .composite([{ input: pngData, gravity: 'center' }])
+          .jpeg({ quality: 90 })
+          .toBuffer();
+
+        // Upload to Vercel Blob and replace the URL in the array
+        const blob = await put(`stamped-${Date.now()}.jpg`, composited, { access: 'public', contentType: 'image/jpeg' });
+        imageUrls[0] = blob.url;
+        console.log("Successfully stamped first image:", blob.url);
+
+      } catch (stampErr) {
+        console.error("Failed to stamp image, proceeding with original:", stampErr);
+      }
+    }
 
     // --- STEP A: POST TO FACEBOOK PAGE (MULTI-PHOTO) ---
     let fbPostId = null;
@@ -41,7 +110,7 @@ export async function POST(request: Request) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             url: url,
-            published: false, // Upload but keep hidden until feed post
+            published: false,
             access_token: ACCESS_TOKEN
           })
         });
@@ -83,7 +152,7 @@ export async function POST(request: Request) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image_url: url,
-          is_carousel_item: true, // Tells Meta this is 1 slide of a carousel
+          is_carousel_item: true,
           access_token: ACCESS_TOKEN
         })
       });
@@ -121,7 +190,6 @@ export async function POST(request: Request) {
     console.log(`IG Carousel Container created successfully. ID: ${creationId}`);
 
     // --- STEP D: SAFETY DELAY ---
-    // Give Meta's servers extra time to process all images before pushing live
     await delay(5000); 
 
     // --- STEP E: PUBLISH INSTAGRAM CAROUSEL ---

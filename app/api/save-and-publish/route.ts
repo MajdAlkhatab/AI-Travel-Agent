@@ -1,6 +1,31 @@
 import { NextResponse } from 'next/server';
 import { put, list } from '@vercel/blob';
 
+function getDealEconomics(deal: any) {
+  const flightCurrent = deal.flight?.price || 0;
+  const hotelTotalCurrent = deal.hotel?.total_rate?.extracted_lowest || 0;
+  const totalCurrent = flightCurrent + hotelTotalCurrent;
+
+  let hotelPct = 0;
+  if (deal.hotel?.deal) {
+    const match = deal.hotel.deal.match(/(\d+)\s*%/);
+    if (match) hotelPct = parseInt(match[1], 10);
+  }
+  const hotelTotalOriginal = (hotelTotalCurrent && hotelPct > 0) ? hotelTotalCurrent / (1 - hotelPct / 100) : hotelTotalCurrent;
+  const flightOriginal = deal.flight?.average_price || flightCurrent;
+  const totalOriginal = flightOriginal + hotelTotalOriginal;
+
+  const totalSavings = totalOriginal > totalCurrent ? totalOriginal - totalCurrent : 0;
+  const totalSavingsPercent = totalSavings > 0 ? Math.round((totalSavings / totalOriginal) * 100) : 0;
+
+  const rate = deal.exchange_rates?.SEK || 10.5;
+  return {
+    totalCurrent: Math.round(totalCurrent * rate),
+    totalSavings: Math.round(totalSavings * rate),
+    totalSavingsPercent
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const curatedDeal = await request.json();
@@ -47,8 +72,8 @@ export async function POST(request: Request) {
 
     // 3. Trigger your secure Instagram/Facebook cross-poster
     if (imageUrls.length > 0 && process.env.API_SECRET_KEY) {
-      // --- SWEDISH TRANSLATION FOR SOCIAL MEDIA CAPTION ---
       const socialCaption = `🔥 Nytt supererbjudande: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flyg & hotell säkrat.\n\nSå här är stämningen:\n${curatedDeal.activity_summary}\n\nLänk i bion för att se hela resplanen och boka innan priserna ändras! 🌍✨`;
+      const economics = getDealEconomics(curatedDeal);
       
       const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
       const host = request.headers.get('host');
@@ -64,7 +89,8 @@ export async function POST(request: Request) {
         },
         body: JSON.stringify({
           imageUrls: imageUrls,
-          caption: socialCaption
+          caption: socialCaption,
+          economics: economics
         })
       });
     }
