@@ -116,8 +116,9 @@ export async function GET(request: Request) {
     // 6. TRIGGER SOCIAL MEDIA PUBLISHING (CAROUSEL)
     // ------------------------------------------------------------------
     try {
+      // ÄNDRING HÄR: Välj original_image i första hand för högre upplösning
       const flightImage = curatedDeal.flight?.thumbnail;
-      const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.thumbnail) || [];
+      const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.original_image || img.thumbnail) || [];
       
       const imageUrls = [flightImage, ...hotelImages]
         .filter((url): url is string => Boolean(url))

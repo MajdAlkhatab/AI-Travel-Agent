@@ -28,8 +28,9 @@ export async function POST(request: Request) {
     });
 
     // 2. Extract multiple images for Carousel (Max 10 for Instagram)
+    // ÄNDRING HÄR: Välj original_image i första hand för högre upplösning
     const flightImage = curatedDeal.flight?.thumbnail;
-    const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.thumbnail) || [];
+    const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.original_image || img.thumbnail) || [];
     
     const imageUrls = [flightImage, ...hotelImages]
       .filter((url): url is string => Boolean(url))
