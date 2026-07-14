@@ -96,8 +96,8 @@ export async function GET(request: Request) {
 
     // 5. Overwrite deals.json
     existingDeals.unshift(curatedDeal);
-    if (existingDeals.length > 9) {
-      existingDeals = existingDeals.slice(0, 9);
+    if (existingDeals.length > 60) {
+      existingDeals = existingDeals.slice(0, 60);
     }
 
     await put('deals.json', JSON.stringify(existingDeals), {

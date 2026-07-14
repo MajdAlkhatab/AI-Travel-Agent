@@ -633,7 +633,7 @@ export default function Home() {
         
         setPipelineDeal(dealData);
         setPipelinePhase('done');
-        setDeals(prev => [dealData, ...prev].slice(0, 9));
+        setDeals(prev => [dealData, ...prev].slice(0, 60));
 
         // Fire the backend storage and social publisher instantly
         await fetch('/api/save-and-publish', {
@@ -665,7 +665,7 @@ export default function Home() {
             if (runIdRef.current !== runId) return;
             setPipelineDeal(payload.data);
             setPipelinePhase('done');
-            setDeals(prev => [payload.data, ...prev].slice(0, 9));
+            setDeals(prev => [payload.data, ...prev].slice(0, 60));
 
             fetch('/api/save-and-publish', {
               method: 'POST',
