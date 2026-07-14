@@ -142,7 +142,7 @@ export async function GET(request: Request) {
     // 6. TRIGGER SOCIAL MEDIA PUBLISHING (CAROUSEL)
     // ------------------------------------------------------------------
     try {
-      let destinationImages = curatedDeal.destination_images || [];
+      const destinationImages = curatedDeal.destination_images || [];
       if (destinationImages.length === 0 && curatedDeal.flight?.thumbnail) {
         destinationImages.push(curatedDeal.flight.thumbnail);
       }
