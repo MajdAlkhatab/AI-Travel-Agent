@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/generate-trip",
-      "destination": "/app.py"
+      "destination": "/api/generate-trip.py"
     }
   ],
   "crons": [
