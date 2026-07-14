@@ -191,25 +191,26 @@ def web_search(query: str) -> str:
     """Search the web for current data (transport, weather, activities)."""
     return str(tavily.search(query))
 
-# EXECUTORS
+# EXECUTORS (Prompts updated to Swedish)
 
-taxi_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a taxi expert. Search for the exact taxi fare price and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+taxi_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a taxi expert. Search for the exact taxi fare price and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
 
-bus_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a public transport expert. Search for the bus/train ticket price and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+bus_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a public transport expert. Search for the bus/train ticket price and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
 
-app_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a ride-hailing expert. Search for Uber/Bolt fare prices and duration from the airport to the hotel. Return ONLY the price and duration without fluff.")
+app_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a ride-hailing expert. Search for Uber/Bolt fare prices and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
 
-transport_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Compare the Taxi, Bus, and App choices. Output a clean, simple bulleted list with NO introductory text like 'Comparison:'. Format exactly like this:\n- **Taxi**: [Price] ([Duration])\n- **Bus**: [Price] ([Duration])\n- **Uber/Bolt**: [Price] ([Duration])\n\n**Final Choice**: [Your short recommendation].")
+transport_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Compare the Taxi, Bus, and App choices. Output a clean, simple bulleted list in Swedish with NO introductory text. Format exactly like this:\n- **Taxi**: [Pris] ([Tidsåtgång])\n- **Buss**: [Pris] ([Tidsåtgång])\n- **Uber/Bolt**: [Pris] ([Tidsåtgång])\n\n**Slutgiltigt val**: [Din korta rekommendation på svenska].")
 
-weather_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer.")
+weather_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer strictly in Swedish.")
 
-activities_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer.")
-culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="You are a cultural expert. Research the destination and provide exactly 6 things: one 'Do', one 'Don't', one local slang word (with meaning), one strict dining/tipping rule, a one-sentence 'vibe check' of the city's pace, and a list of the top 3 must-try local foods.")
+activities_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer strictly in Swedish.")
 
-activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination. Use exactly three Markdown headers: '### 🌤️ Weather', '### 🎯 Top Activities', and '### 🏛️ Culture & Etiquette'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (Exactly 6 bullet points: Do, Don't, Slang, Dining, Vibe, and Top 3 Foods. CRITICAL: Each must be strictly one short sentence). CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs.")
+culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="You are a cultural expert. Research the destination and provide exactly 6 things strictly in Swedish: one 'Gör' (Do), one 'Gör inte' (Don't), one local slang word (with meaning), one strict dining/tipping rule, a one-sentence 'vibe check' of the city's pace, and a list of the top 3 must-try local foods.")
+
+activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination in Swedish. Use exactly three Markdown headers: '### 🌤️ Väder', '### 🎯 Toppaktiviteter', and '### 🏛️ Kultur & Vett och etikett'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (Exactly 6 bullet points: Gör, Gör inte, Slang, Restaurang/Dricks, Vibe, and Topp 3 maträtter. CRITICAL: Each must be strictly one short sentence). CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs.")
 
 
-tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer without mentioning any dates.")
+tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer without mentioning any dates. Reply strictly in Swedish.")
 
 _frankfurter_executor = None
 async def get_frankfurter_executor():
@@ -217,7 +218,7 @@ async def get_frankfurter_executor():
     if _frankfurter_executor is None:
         client = MultiServerMCPClient({"frankfurter": {"transport": "streamable_http", "url": "https://mcp.frankfurter.dev/"}})
         tools = await client.get_tools()
-        _frankfurter_executor = create_agent(model="gpt-5-nano", tools=tools, system_prompt="Use get_rates to find exchange rate. Return short answer without mentioning any dates.")
+        _frankfurter_executor = create_agent(model="gpt-5-nano", tools=tools, system_prompt="Use get_rates to find exchange rate. Return short answer without mentioning any dates. Reply strictly in Swedish.")
     return _frankfurter_executor
 
 # --- 4. LANGGRAPH NODES ---
@@ -320,14 +321,14 @@ async def node_currency(state: TravelPlanState):
 
 async def node_synthesize(state: TravelPlanState):
     prompt = f"""
-    You are a professional travel agent. Provide ONLY a punchy, day-by-day itinerary for the trip. 
+    You are a professional travel agent. Provide ONLY a punchy, day-by-day itinerary for the trip strictly in Swedish. 
     
     CRITICAL INSTRUCTIONS: 
     1. DO NOT summarize or mention the flight details, hotel names, prices, weather forecasts, or currency exchange rates in this output. 
-    2. Format each day as a distinct Markdown header (e.g., ### Day 1 - Aug 20).
-    3. Under each day header, use simple bullet points for Morning, Afternoon, and Evening activities.
+    2. Format each day as a distinct Markdown header (e.g., ### Dag 1 - 20 Aug).
+    3. Under each day header, use simple bullet points for Förmiddag (Morning), Eftermiddag (Afternoon), and Kväll (Evening) activities.
     
-    Destination: {state['destination']}, {state['country']} ({state['start_date']} to {state['end_date']})
+    Destination: {state['destination']}, {state['country']} ({state['start_date']} till {state['end_date']})
     Transport Context: {state['transport_summary']}
     Activities/Culture Context: {state['activity_summary']}
     """
@@ -360,10 +361,10 @@ app = FastAPI()
 @app.get("/")
 @app.get("/api/generate-trip")
 async def generate_trip(
-    departure_id: str = "CPH", 
+    departure_id: str = "ARN", # Updated default to Arlanda for Swedish market
     travelers: int = 2, 
     duration: str = "2", 
-    home_currency: str = "SEK",
+    home_currency: str = "SEK", # Default remains SEK
     exclude_destinations: str = "",
 ):
     """

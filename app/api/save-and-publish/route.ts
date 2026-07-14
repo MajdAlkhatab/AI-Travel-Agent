@@ -31,7 +31,8 @@ export async function POST(request: Request) {
     const heroImage = curatedDeal.flight?.thumbnail || curatedDeal.hotel?.images?.[0]?.thumbnail;
     
     if (heroImage && process.env.API_SECRET_KEY) {
-      const socialCaption = `🔥 New Deal Alert: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flights & Hotel found.\n\nHere is the vibe:\n${curatedDeal.activity_summary}\n\nLink in bio to see the full itinerary and book before prices change! 🌍✨`;
+      // --- PHASE 3: SWEDISH TRANSLATION FOR SOCIAL MEDIA CAPTION ---
+      const socialCaption = `🔥 Nytt supererbjudande: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flyg & hotell säkrat.\n\nSå här är stämningen:\n${curatedDeal.activity_summary}\n\nLänk i bion för att se hela resplanen och boka innan priserna ändras! 🌍✨`;
       
       const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
       const host = request.headers.get('host');
