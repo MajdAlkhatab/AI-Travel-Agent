@@ -80,7 +80,39 @@ export async function GET(request: Request) {
       throw new Error(`Python API failed: ${agentResponse.status} - ${errorText}`);
     }
 
-    const newDeal = await agentResponse.json();
+    // Read the streaming response as plain text
+    const rawText = await agentResponse.text();
+    const lines = rawText.split('\n\n');
+    
+    let newDeal = null;
+
+    // Loop through the stream chunks to find the "complete" payload
+    for (const line of lines) {
+      if (line.trim().startsWith('data: ')) {
+        try {
+          const payloadStr = line.replace('data: ', '').trim();
+          if (!payloadStr) continue;
+          
+          const payload = JSON.parse(payloadStr);
+          
+          if (payload.type === 'complete') {
+            newDeal = payload.data;
+          } else if (payload.type === 'error') {
+            throw new Error(`Python Agent Error: ${payload.message}`);
+          }
+        } catch (e) {
+          // Ignore parse errors on incomplete chunks
+        }
+      }
+    }
+
+    if (!newDeal) {
+      console.warn("No complete deal payload found in the stream.");
+      return NextResponse.json({
+        success: false,
+        message: "Stream finished but no valid deal was found."
+      });
+    }
     
     // Fetch live exchange rates
     try {
