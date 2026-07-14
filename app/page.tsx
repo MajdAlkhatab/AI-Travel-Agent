@@ -811,19 +811,35 @@ export default function Home() {
                     </span>
 
                     {econ.hasSavings ? (
-                      <div className="absolute top-16 right-4 z-10 bg-green-600 rounded-lg px-3 py-1.5 shadow-md">
-                        <div className="text-[10px] text-green-50 uppercase tracking-wide leading-none mb-0.5">Du sparar</div>
-                        <div className="text-lg font-semibold text-white leading-none">
-                          {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
-                          {econ.totalSavingsPercent != null && (
-                            <span className="text-xs font-medium text-green-100 ml-1">({econ.totalSavingsPercent}%)</span>
-                          )}
+                      <div className="absolute top-12 right-4 z-10 flex flex-col items-end">
+                        {/* 1. Procentuell Rabatt (Inspirerad av den röda lappen) */}
+                        {econ.totalSavingsPercent != null && (
+                          <div className="bg-red-600 text-white text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-t-lg rounded-bl-lg shadow-md z-20 translate-y-1 border border-red-700">
+                            {econ.totalSavingsPercent}% Rabatt
+                          </div>
+                        )}
+                        
+                        {/* 2 & 3. Huvudkortet med Totalt pris och "Du sparar" */}
+                        <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-xl border border-gray-100 flex flex-col items-end z-10">
+                          <div className="text-[9px] text-gray-500 uppercase tracking-widest font-bold mb-0.5">
+                            Totalt pris
+                          </div>
+                          <div className="text-2xl font-black text-gray-900 leading-none mb-2">
+                            {formatPrice(econ.totalCurrent!, displayCurrency, latestRates)}
+                          </div>
+                          <div className="bg-green-100 text-green-800 text-[11px] font-bold px-2 py-1 rounded-md border border-green-200">
+                            Du sparar {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
+                          </div>
                         </div>
                       </div>
                     ) : econ.totalCurrent != null ? (
-                      <div className="absolute top-16 right-4 z-10 bg-white rounded-lg px-3 py-1.5 shadow-md">
-                        <div className="text-[10px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">Totalt</div>
-                        <div className="text-lg font-semibold text-gray-900 leading-none">{formatPrice(econ.totalCurrent, displayCurrency, latestRates)}</div>
+                      <div className="absolute top-14 right-4 z-10 bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-xl border border-gray-100 flex flex-col items-end">
+                        <div className="text-[9px] text-gray-500 uppercase tracking-widest font-bold mb-0.5">
+                          Totalt pris
+                        </div>
+                        <div className="text-2xl font-black text-gray-900 leading-none">
+                          {formatPrice(econ.totalCurrent, displayCurrency, latestRates)}
+                        </div>
                       </div>
                     ) : null}
 
