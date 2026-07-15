@@ -248,13 +248,17 @@ async def node_trip_deals(state: TravelPlanState):
 
     # 1. Smart Date Selection
     if duration_type == "2":
+        # 🎲 RANDOMLY select just ONE weekend to save API credits and force exact dates
         weekends = get_upcoming_weekends(3)
         target_outbound, target_return = random.choice(weekends)
         duration_param = None
+        print(f"[trip-deals] Selected Exact Weekend: {target_outbound} to {target_return}")
     else:
+        # Flexible range for 1 or 2 weeks
         target_outbound = flexible_date_range(60)
         target_return = None
         duration_param = duration_type
+        print(f"[trip-deals] Selected Flexible Dates: {target_outbound} (Duration: {duration_param})")
 
     departure_ids_to_try = [departure_id] + [d for d in DEPARTURE_FALLBACKS if d != departure_id]
     
