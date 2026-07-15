@@ -3,13 +3,14 @@ import asyncio
 import json
 import re
 import time
+import random
 from datetime import date, timedelta, datetime, timezone
 from typing import TypedDict, Annotated, List, Union
 
 import serpapi
 from dotenv import load_dotenv
 from tavily import TavilyClient
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -28,23 +29,32 @@ serp_client = serpapi.Client(api_key=SERP_API_KEY)
 tavily = TavilyClient()
 llm = ChatOpenAI(model="gpt-5-nano") 
 
-class Destination(BaseModel):
-    destination: str
-
-structured_llm = llm.with_structured_output(Destination)
-
 # Departure airports to try, in order, if the requested one has no usable
 # deals this run. Stockholm Arlanda first (larger hub, more deal volume),
 # then Göteborg Landvetter. Swap the order below to prefer GOT first.
 DEPARTURE_FALLBACKS = ["ARN", "GOT"]  # Stockholm Arlanda, Göteborg Landvetter
 
-# --- 2. GRAPH STATE SCHEMA ---
+# --- 2. AI PYDANTIC MODELS ---
+class DestinationArea(BaseModel):
+    destination: str
+
+class FilteredCities(BaseModel):
+    cities: list[str] = Field(description="List of filtered cities ordered from most to least popular. No duplicates.")
+
+class HotelWinner(BaseModel):
+    hotel_name: str = Field(description="The exact name of the winning hotel")
+    verdict: str = Field(description="A concise summary of why this is the best balanced option.")
+
+structured_llm = llm.with_structured_output(DestinationArea)
+
+# --- 3. GRAPH STATE SCHEMA ---
 class TravelPlanState(TypedDict):
     departure_id: str
     travelers: int
     duration: str
     home_currency: str
     exclude_destinations: List[str]
+    user_preference: str  # NEW: beach or city
 
     flight: dict
     hotel: dict
@@ -63,26 +73,44 @@ class TravelPlanState(TypedDict):
     currency_summary: str
     
     final_itinerary: str
-    social_caption: str # NYTT FÄLT FÖR SOCIALA MEDIER
+    social_caption: str 
 
-# --- 3. CORE LOGIC ---
+# --- 4. CORE LOGIC ---
+def get_upcoming_weekends(weeks=3):
+    """Calculates exact (Friday, Sunday) dates for upcoming weekends."""
+    weekends = []
+    today = date.today()
+    days_ahead = 4 - today.weekday()
+    if days_ahead <= 0: 
+        days_ahead += 7
+    next_friday = today + timedelta(days=days_ahead)
+    
+    for i in range(weeks):
+        fri = next_friday + timedelta(days=i*7)
+        sun = fri + timedelta(days=2)
+        weekends.append((fri.isoformat(), sun.isoformat()))
+    return weekends
+
 def flexible_date_range(days_ahead=60):
     today = date.today()
     tomorrow = today + timedelta(days=1)
     end = today + timedelta(days=days_ahead)
     return f"{tomorrow.isoformat()},{end.isoformat()}"
 
-def get_flight_deals(departure_id, outbound_date_range, travel_duration="2", currency="USD", gl="us", hl="en"):
+def get_flight_deals(departure_id, outbound_date, return_date=None, travel_duration=None, currency="USD", gl="us", hl="en"):
     params = {
         "engine": "google_flights_deals",
         "departure_id": departure_id,
-        "outbound_date": outbound_date_range,
-        "travel_duration": travel_duration,
+        "outbound_date": outbound_date,
         "currency": currency,
         "gl": gl, "hl": hl,
     }
+    if return_date:
+        params["return_date"] = return_date
+    if travel_duration:
+        params["travel_duration"] = travel_duration
 
-    print(f"[flight-search] request departure_id={departure_id} outbound_date={outbound_date_range} travel_duration={travel_duration} currency={currency}")
+    print(f"[flight-search] request departure_id={departure_id} outbound={outbound_date}")
 
     start = time.monotonic()
     raw_result = serp_client.search(params)
@@ -145,9 +173,9 @@ def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, curren
     print(f"[hotel-search] destination='{destination}' returned {len(properties)} properties")
     return result
 
-def get_best_hotel_area(city, country):
+async def get_best_hotel_area(city, country):
     prompt = f"What is the single most popular tourist destination/area for hotels in or near {city}, {country}? Reply with just the destination name."
-    result = structured_llm.invoke(prompt)
+    result = await structured_llm.ainvoke(prompt)
     print(f"[hotel-area] {city}, {country} -> {result.destination}")
     return result.destination
 
@@ -182,32 +210,6 @@ def hotel_discount_percent(hotel):
     match = re.search(r"(\d+)%", hotel.get("deal", ""))
     return int(match.group(1)) if match else 0
 
-def pick_best_flight(flights, exclude, departure_id=None):
-    total = len(flights)
-    missing_dates = [f for f in flights if not (f.get("outbound_date") and f.get("return_date"))]
-    valid_dated = [f for f in flights if f.get("outbound_date") and f.get("return_date")]
-    excluded = [f for f in valid_dated if f.get("country", "").strip().lower() in exclude]
-    eligible = [f for f in valid_dated if f.get("country", "").strip().lower() not in exclude]
-
-    print(
-        f"[pick-flight] departure_id={departure_id} total={total} "
-        f"missing_dates={len(missing_dates)} excluded_by_country={len(excluded)} "
-        f"eligible={len(eligible)} exclude_set={sorted(exclude) if exclude else []}"
-    )
-    if excluded:
-        excluded_countries = sorted({f.get('country') for f in excluded})
-        print(f"[pick-flight] departure_id={departure_id} excluded countries this batch: {excluded_countries}")
-
-    deals_by_discount = sorted(eligible, key=lambda d: d.get("discount_percentage", 0), reverse=True)
-    best = deals_by_discount[0] if deals_by_discount else None
-    if best:
-        print(
-            f"[pick-flight] departure_id={departure_id} SELECTED "
-            f"{best.get('name')}, {best.get('country')} "
-            f"(${best.get('price')}, {best.get('discount_percentage')}% off)"
-        )
-    return best
-
 @tool
 def web_search(query: str) -> str:
     """Search the web for current data (transport, weather, activities)."""
@@ -235,39 +237,96 @@ async def get_frankfurter_executor():
         _frankfurter_executor = create_agent(model="gpt-5-nano", tools=tools, system_prompt="Use get_rates to find exchange rate. Return short answer without mentioning any dates. Reply strictly in Swedish.")
     return _frankfurter_executor
 
-# --- 4. LANGGRAPH NODES ---
+# --- 5. LANGGRAPH NODES ---
 async def node_trip_deals(state: TravelPlanState):
-    dates = flexible_date_range(60)
+    user_preference = state.get("user_preference", "beach")
+    duration_type = state["duration"]
+    departure_id = state["departure_id"]
     exclude = {c.strip().lower() for c in state.get("exclude_destinations", []) if c and c.strip()}
 
-    departure_ids_to_try = [state["departure_id"]] + [
-        d for d in DEPARTURE_FALLBACKS if d != state["departure_id"]
-    ]
+    print(f"[trip-deals] starting run: pref={user_preference} exclude={exclude}")
 
-    print(f"[trip-deals] starting run: fallback_chain={departure_ids_to_try} exclude_destinations={state.get('exclude_destinations')}")
+    # 1. Smart Date Selection
+    if duration_type == "2":
+        weekends = get_upcoming_weekends(3)
+        target_outbound, target_return = random.choice(weekends)
+        duration_param = None
+    else:
+        target_outbound = flexible_date_range(60)
+        target_return = None
+        duration_param = duration_type
 
+    departure_ids_to_try = [departure_id] + [d for d in DEPARTURE_FALLBACKS if d != departure_id]
+    
     best_flight = None
     raw_flight_response = None
+    raw_flights = []
 
-    for departure_id in departure_ids_to_try:
-        raw_flight_response = get_flight_deals(departure_id, dates, travel_duration=state["duration"])
-        flights = raw_flight_response.get("deals", [])
-        best_flight = pick_best_flight(flights, exclude, departure_id=departure_id)
-        if best_flight:
+    # 2. Flight Hunt
+    for dep_id in departure_ids_to_try:
+        raw_flight_response = get_flight_deals(dep_id, target_outbound, target_return, duration_param)
+        deals = raw_flight_response.get("deals", [])
+        if deals:
+            raw_flights = deals
             break
-        print(f"[trip-deals] no eligible flight from {departure_id}, trying next fallback airport...")
+        print(f"[trip-deals] no eligible flight from {dep_id}, trying next fallback airport...")
 
-    if not best_flight:
-        print(f"[trip-deals] FINAL: no deal found across {departure_ids_to_try}")
+    if not raw_flights:
+        print(f"[trip-deals] FINAL: no deals found across {departure_ids_to_try}")
         return {"destination": None, "raw_flight_response": raw_flight_response}
 
+    eligible_flights = [
+        f for f in raw_flights 
+        if f.get("outbound_date") and f.get("return_date") 
+        and f.get("country", "").strip().lower() not in exclude
+    ]
+
+    if not eligible_flights:
+        print(f"[trip-deals] FINAL: no eligible deals after exclusions")
+        return {"destination": None, "raw_flight_response": raw_flight_response}
+
+    # 3. AI-Powered Filtering & Ranking
+    raw_city_list = [f.get("name") for f in eligible_flights if f.get("name")]
+    prompt_modifier = (
+        "the most popular beach and summer destinations" if user_preference == "beach" 
+        else "the world's most visited tourist destinations with no beach and summer"
+    )
+    
+    prompt = f"""
+    Here is a raw list of destination cities pulled from our flight data (duplicates included): 
+    {raw_city_list}
+
+    Which of these cities are {prompt_modifier}? 
+    Return ONLY the cities from this list that match the criteria. 
+    Order the final list strictly from MOST popular to LEAST popular. 
+    Ensure there are NO DUPLICATES in your final returned list.
+    """
+    
+    filter_llm = llm.with_structured_output(FilteredCities)
+    res_cities = await filter_llm.ainvoke(prompt)
+    ranked_cities = res_cities.cities
+
+    if not ranked_cities:
+        print(f"[trip-deals] FINAL: AI filtered out all cities")
+        return {"destination": None, "raw_flight_response": raw_flight_response}
+
+    # 4. Locking in the Destination
+    target_city_lower = ranked_cities[0].lower()
+    flights_to_winner = [f for f in eligible_flights if f.get("name", "").lower() == target_city_lower]
+    flights_to_winner = sorted(flights_to_winner, key=lambda d: d.get("discount_percentage", 0), reverse=True)
+    
+    if not flights_to_winner:
+        return {"destination": None, "raw_flight_response": raw_flight_response}
+
+    best_flight = flights_to_winner[0]
     city, country = best_flight["name"], best_flight["country"]
     check_in, check_out = best_flight["outbound_date"], best_flight["return_date"]
-    
+
     dest_query = f"{city} {country} tourism landmarks high quality"
     destination_images = get_destination_images(dest_query, max_images=5)
-    
-    hotel_area = get_best_hotel_area(city, country)
+
+    # 5. The Ultimate Hotel Judge
+    hotel_area = await get_best_hotel_area(city, country)
     raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
     hotels = raw_hotel_response.get("properties", [])
     
@@ -278,7 +337,43 @@ async def node_trip_deals(state: TravelPlanState):
         )
         hotels = raw_hotel_response.get("properties", [])
     
-    best_hotel = max(hotels, key=hotel_discount_percent) if hotels else None
+    best_hotel = None
+    if hotels:
+        formatted_hotels = []
+        for h in hotels[:10]:
+            formatted_hotels.append(
+                f"- Name: {h.get('name')}\n"
+                f"  Price: {h.get('rate_per_night', {}).get('lowest', 'N/A')}/night\n"
+                f"  Discount: {hotel_discount_percent(h)}%\n"
+                f"  Rating: {h.get('overall_rating', 'N/A')}⭐\n"
+                f"  Reviews: {h.get('reviews', 0)}\n"
+            )
+        
+        judge_prompt = f"""
+        Here is a list of available hotels in {city}, {country}:
+        {"".join(formatted_hotels)}
+        
+        You are an expert travel analyst. Evaluate this list and select the single BEST overall choice 
+        based on an equal balance of 4 factors: Price, Discount %, Number of Reviews, and Star Rating.
+        Do only choose Hotel, not Hostel.
+        """
+        
+        hotel_llm = llm.with_structured_output(HotelWinner)
+        winning_hotel_eval = await hotel_llm.ainvoke(judge_prompt)
+        
+        # Match AI winner back to the hotel dict
+        chosen_name_lower = winning_hotel_eval.hotel_name.lower()
+        for h in hotels:
+            if h.get('name', '').lower() == chosen_name_lower:
+                best_hotel = h
+                break
+        
+        if not best_hotel:
+            best_hotel = hotels[0]
+            
+        # Store verdict to display on the frontend if needed
+        best_hotel['deal_description'] = winning_hotel_eval.verdict 
+
     print(f"[trip-deals] FINAL: {city}, {country} | hotel={'yes' if best_hotel else 'none found'}")
     
     return {
@@ -332,7 +427,6 @@ async def node_currency(state: TravelPlanState):
     return {"currency_summary": ans}
 
 async def node_synthesize(state: TravelPlanState):
-    # Agent 1: Itinerary (For the Frontend Dashboard)
     itin_prompt = f"""
     You are a professional travel agent. Provide ONLY a punchy, day-by-day itinerary for the trip strictly in Swedish. 
     CRITICAL INSTRUCTIONS: 
@@ -345,7 +439,6 @@ async def node_synthesize(state: TravelPlanState):
     Activities/Culture Context: {state['activity_summary']}
     """
     
-    # Agent 2: Social Media Caption (For Instagram/Facebook API)
     social_prompt = f"""
     Kontext om resan (Hämta inspiration härifrån men skriv om det snyggt):
     {state['activity_summary']}
@@ -375,7 +468,7 @@ async def node_synthesize(state: TravelPlanState):
         "social_caption": res_social.content
     }
 
-# --- 5. GRAPH WIRING ---
+# --- 6. GRAPH WIRING ---
 def route_after_deals(state: TravelPlanState) -> Union[List[str], str]:
     if not state.get("destination"): return END 
     return ["transport", "activities", "currency"]
@@ -395,7 +488,7 @@ builder.add_edge("currency", "synthesize")
 builder.add_edge("synthesize", END)
 graph = builder.compile()
 
-# --- 6. FASTAPI APPLICATION SETUP ---
+# --- 7. FASTAPI APPLICATION SETUP ---
 app = FastAPI()
 
 @app.get("/")
@@ -406,6 +499,7 @@ async def generate_trip(
     duration: str = "2", 
     home_currency: str = "SEK", 
     exclude_destinations: str = "",
+    user_preference: str = "beach", # NEW PARAMETER
 ):
     inputs = {
         "departure_id": departure_id,
@@ -413,6 +507,7 @@ async def generate_trip(
         "duration": duration, 
         "home_currency": home_currency,
         "exclude_destinations": [c for c in exclude_destinations.split(",") if c.strip()],
+        "user_preference": user_preference, # PASS TO GRAPH
     }
     
     async def event_stream():

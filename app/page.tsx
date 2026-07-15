@@ -558,6 +558,7 @@ export default function Home() {
     travelers: 2,
     duration: '2',
     homeCurrency: 'SEK', 
+    userPreference: 'beach', // NEW: Added user preference state
   });
 
   const [pipelinePhase, setPipelinePhase] = useState<Phase>('idle');
@@ -622,6 +623,7 @@ export default function Home() {
         travelers: String(params.travelers),
         duration: params.duration,
         home_currency: params.homeCurrency,
+        user_preference: params.userPreference, // NEW: Added preference parameter
         exclude_destinations: recentCountries, 
       }).toString()}`;
       
@@ -962,18 +964,31 @@ export default function Home() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Hemvaluta</label>
-                <select
-                  value={triggerParams.homeCurrency}
-                  onChange={(e) => setTriggerParams({ ...triggerParams, homeCurrency: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="SEK">SEK</option>
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                  <option value="GBP">GBP</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Hemvaluta</label>
+                  <select
+                    value={triggerParams.homeCurrency}
+                    onChange={(e) => setTriggerParams({ ...triggerParams, homeCurrency: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="SEK">SEK</option>
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                    <option value="GBP">GBP</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Typ av resa</label>
+                  <select
+                    value={triggerParams.userPreference}
+                    onChange={(e) => setTriggerParams({ ...triggerParams, userPreference: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="beach">Strand & Bad</option>
+                    <option value="city">Stadspuls</option>
+                  </select>
+                </div>
               </div>
             </div>
 

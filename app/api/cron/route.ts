@@ -35,11 +35,16 @@ export async function GET(request: Request) {
     const randomAirport = airports[Math.floor(Math.random() * airports.length)];
     const randomTravelers = Math.random() > 0.5 ? '1' : '2'; 
     const randomDuration = Math.random() > 0.5 ? '2' : '1'; 
+    
+    // NEW: Randomize preference for the automated run
+    const preferences = ['beach', 'city'];
+    const randomPreference = preferences[Math.floor(Math.random() * preferences.length)];
 
     const departureId = searchParams.get('departure_id') || randomAirport;
     const travelers = searchParams.get('travelers') || randomTravelers;
     const duration = searchParams.get('duration') || randomDuration;
     const homeCurrency = searchParams.get('home_currency') || 'SEK';
+    const userPreference = searchParams.get('user_preference') || randomPreference; // NEW
 
     // 1. Fetch existing deals FIRST
     let existingDeals: any[] = [];
@@ -69,6 +74,7 @@ export async function GET(request: Request) {
       travelers,
       duration,
       home_currency: homeCurrency,
+      user_preference: userPreference, // NEW: Passing it to the Python API
       exclude_destinations: recentCountries.join(','),
     }).toString()}`;
 
