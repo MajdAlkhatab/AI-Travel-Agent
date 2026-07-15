@@ -356,10 +356,12 @@ async def node_synthesize(state: TravelPlanState):
     CRITICAL INSTRUCTIONS 
     1. Allt ska vara på naturlig svenska
     2. Börja med en stark, levande inledning/hook baserad på stadens vibbar
-    3. Ta INTE med några info om priser överhuvudtaget 
+    3. Ta INTE med några info om priser och kostnader, även om något är fri  
     4. Använd fina Emojis istället för fula Markdown-rubriker. ANVÄND ALDRIG "###".
-    5. Strukturera inlägget med: 1. Inledning, 2. Kort om vädret 🌤, 3. "Missa inte:", 4. "💡 Bra att veta:". Men skriv inte "1. Inledning" och "2. Kort om vädret", skriv det på ett naturligt sätt.
-    6. Avsluta ALLTID inlägget med något linknande till denna mening och radbrytning: 
+    5. Strukturera inlägget med: 1. Inledning, 2. Kort om vädret 🌤, 3. "Missa inte:", 4. "💡 Bra att veta:".
+    6. Skriv inte ut rubrikerna (t.ex. "1. Inledning" eller "2. Kort om vädret"), utan skriv endast innehållet.
+    7. Skriv inte "–"
+    8. Avsluta ALLTID inlägget med något linknande till denna mening och radbrytning: 
        "Länk i bion för att se exakta priser, hela resplanen och boka innan priset ändras! ✈️👇"
     """
 
