@@ -248,17 +248,15 @@ async def node_trip_deals(state: TravelPlanState):
 
     # 1. Smart Date Selection
     if duration_type == "2":
-        # 🎲 RANDOMLY select just ONE weekend to save API credits and force exact dates
+        # RANDOMLY select ONE exact weekend
         weekends = get_upcoming_weekends(3)
         target_outbound, target_return = random.choice(weekends)
         duration_param = None
-        print(f"[trip-deals] Selected Exact Weekend: {target_outbound} to {target_return}")
     else:
         # Flexible range for 1 or 2 weeks
         target_outbound = flexible_date_range(60)
         target_return = None
         duration_param = duration_type
-        print(f"[trip-deals] Selected Flexible Dates: {target_outbound} (Duration: {duration_param})")
 
     departure_ids_to_try = [departure_id] + [d for d in DEPARTURE_FALLBACKS if d != departure_id]
     
@@ -279,21 +277,40 @@ async def node_trip_deals(state: TravelPlanState):
         print(f"[trip-deals] FINAL: no deals found across {departure_ids_to_try}")
         return {"destination": None, "raw_flight_response": raw_flight_response}
 
-    eligible_flights = [
-        f for f in raw_flights 
-        if f.get("outbound_date") and f.get("return_date") 
-        and f.get("country", "").strip().lower() not in exclude
-    ]
+    # STRICT DURATION FILTER: Google's API sometimes ignores requested duration
+    eligible_flights = []
+    for f in raw_flights:
+        out_str = f.get("outbound_date")
+        ret_str = f.get("return_date")
+        country = f.get("country", "").strip().lower()
+
+        if out_str and ret_str and country not in exclude:
+            try:
+                # Calculate the exact number of nights
+                cin = datetime.strptime(out_str, "%Y-%m-%d").date()
+                cout = datetime.strptime(ret_str, "%Y-%m-%d").date()
+                nights = (cout - cin).days
+
+                if duration_type == "2" and (nights < 2 or nights > 4):
+                    continue  # Helg (Weekend) should be 2-4 nights
+                if duration_type == "1" and not (5 <= nights <= 9):
+                    continue  # 1 Week should be 5-9 nights
+                if duration_type == "3" and not (12 <= nights <= 16):
+                    continue  # 2 Weeks should be 12-16 nights
+
+                eligible_flights.append(f)
+            except Exception:
+                pass
 
     if not eligible_flights:
-        print(f"[trip-deals] FINAL: no eligible deals after exclusions")
+        print(f"[trip-deals] FINAL: no eligible deals after exclusions and strict duration filtering")
         return {"destination": None, "raw_flight_response": raw_flight_response}
 
     # 3. AI-Powered Filtering & Ranking
     raw_city_list = [f.get("name") for f in eligible_flights if f.get("name")]
     prompt_modifier = (
-        "the most popular beach and summer destinations" if user_preference == "beach" 
-        else "the world's most visited tourist destinations with no beach and summer"
+        "the most popular budget-friendly beach and summer destinations" if user_preference == "beach" 
+        else "the most popular budget-friendly city break destinations"
     )
     
     prompt = f"""
@@ -331,15 +348,8 @@ async def node_trip_deals(state: TravelPlanState):
 
     # 5. The Ultimate Hotel Judge
     hotel_area = await get_best_hotel_area(city, country)
-    raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
+    raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"], special_offers="false")
     hotels = raw_hotel_response.get("properties", [])
-    
-    if not hotels:
-        print(f"[trip-deals] No special offers found for {city}. Trying without filter...")
-        raw_hotel_response = get_hotel_deals(
-            f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"], special_offers="false"
-        )
-        hotels = raw_hotel_response.get("properties", [])
     
     best_hotel = None
     if hotels:
@@ -357,8 +367,8 @@ async def node_trip_deals(state: TravelPlanState):
         Here is a list of available hotels in {city}, {country}:
         {"".join(formatted_hotels)}
         
-        You are an expert travel analyst. Evaluate this list and select the single BEST overall choice 
-        based on an equal balance of 4 factors: Price, Discount %, Number of Reviews, and Star Rating.
+        You are an expert budget travel analyst. Evaluate this list and select the single BEST overall choice.
+        CRITICAL INSTRUCTION: Prioritize BUDGET and VALUE. Your goal is to find the cheapest acceptable hotel that has decent reviews and >3.5 stars.
         Do only choose Hotel, not Hostel.
         """
         
