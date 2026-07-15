@@ -44,8 +44,6 @@ class TravelPlanState(TypedDict):
     travelers: int
     duration: str
     home_currency: str
-    # Countries to skip when picking a flight deal — used to avoid repeating
-    # the same destination across recent runs (e.g. last 7 saved trips).
     exclude_destinations: List[str]
 
     flight: dict
@@ -55,11 +53,8 @@ class TravelPlanState(TypedDict):
     start_date: str
     end_date: str
     hotel_area: str
-    destination_images: List[str]  # New field to hold the 5 destination images
+    destination_images: List[str] 
 
-    # Full, untouched SerpApi responses — kept alongside the curated fields
-    # above so the raw payload (images, thumbnails, etc.) is preserved for
-    # future frontend use without changing anything else downstream.
     raw_flight_response: dict
     raw_hotel_response: dict
 
@@ -68,6 +63,7 @@ class TravelPlanState(TypedDict):
     currency_summary: str
     
     final_itinerary: str
+    social_caption: str # NYTT FÄLT FÖR SOCIALA MEDIER
 
 # --- 3. CORE LOGIC ---
 def flexible_date_range(days_ahead=60):
@@ -102,8 +98,6 @@ def get_flight_deals(departure_id, outbound_date_range, travel_duration="2", cur
 
     error = result.get("error")
     if error:
-        # google_flights_deals_url lets you manually re-open this exact
-        # search in a browser to sanity-check whether it's really empty.
         deals_url = metadata.get("google_flights_deals_url")
         print(f"[flight-search] ERROR departure_id={departure_id} error={error!r} check_url={deals_url}")
         if "empty results" in str(error).lower():
@@ -158,7 +152,6 @@ def get_best_hotel_area(city, country):
     return result.destination
 
 def get_destination_images(query: str, max_images: int = 5) -> List[str]:
-    """Uses SerpApi Google Images engine to fetch top destination images."""
     params = {
         "engine": "google_images",
         "q": query,
@@ -217,27 +210,18 @@ def pick_best_flight(flights, exclude, departure_id=None):
 
 @tool
 def web_search(query: str) -> str:
-    """Search the web for current data (transport, weather, activities)."""
     return str(tavily.search(query))
 
-# EXECUTORS (Prompts updated to Swedish)
-
 taxi_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a taxi expert. Search for the exact taxi fare price and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
-
 bus_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a public transport expert. Search for the bus/train ticket price and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
-
 app_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a ride-hailing expert. Search for Uber/Bolt fare prices and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
 
 transport_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Compare the Taxi, Bus, and App choices. Output a clean, simple bulleted list in Swedish with NO introductory text. Format exactly like this:\n- **Taxi**: [Pris] ([Tidsåtgång])\n- **Buss**: [Pris] ([Tidsåtgång])\n- **Uber/Bolt**: [Pris] ([Tidsåtgång])\n\n**Slutgiltigt val**: [Din korta rekommendation på svenska].")
-
 weather_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer strictly in Swedish.")
-
 activities_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer strictly in Swedish.")
-
 culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="You are a cultural expert. Research the destination and provide exactly 6 things strictly in Swedish: one 'Gör' (Do), one 'Gör inte' (Don't), one local slang word (with meaning), one strict dining/tipping rule, a one-sentence 'vibe check' of the city's pace, and a list of the top 3 must-try local foods.")
 
 activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination in Swedish. Use exactly three Markdown headers: '### 🌤️ Väder', '### 🎯 Toppaktiviteter', and '### 🏛️ Kultur & Vett och etikett'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (Exactly 6 bullet points: Gör, Gör inte, Slang, Restaurang/Dricks, Vibe, and Topp 3 maträtter. CRITICAL: Each must be strictly one short sentence). CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs.")
-
 
 tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer without mentioning any dates. Reply strictly in Swedish.")
 
@@ -279,8 +263,6 @@ async def node_trip_deals(state: TravelPlanState):
     city, country = best_flight["name"], best_flight["country"]
     check_in, check_out = best_flight["outbound_date"], best_flight["return_date"]
     
-    # --- Fetch Destination Images ---
-    # Query for beautiful city imagery to populate our 5 destination photos
     dest_query = f"{city} {country} tourism landmarks high quality"
     destination_images = get_destination_images(dest_query, max_images=5)
     
@@ -288,14 +270,12 @@ async def node_trip_deals(state: TravelPlanState):
     raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
     hotels = raw_hotel_response.get("properties", [])
     
-    # --- ADDED FALLBACK ---
     if not hotels:
         print(f"[trip-deals] No special offers found for {city}. Trying without filter...")
         raw_hotel_response = get_hotel_deals(
             f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"], special_offers="false"
         )
         hotels = raw_hotel_response.get("properties", [])
-    # ----------------------
     
     best_hotel = max(hotels, key=hotel_discount_percent) if hotels else None
     print(f"[trip-deals] FINAL: {city}, {country} | hotel={'yes' if best_hotel else 'none found'}")
@@ -316,15 +296,12 @@ async def node_trip_deals(state: TravelPlanState):
 async def node_transport(state: TravelPlanState):
     hotel_name = state['hotel'].get('name', state['hotel_area']) if state.get('hotel') else state['hotel_area']
     loc = f"{hotel_name}, {state['destination']}"
-
     query = f"Airport: {state['flight']['arrival_airport_code']}\nDates: {state['start_date']}-{state['end_date']}\nHotel: {loc}\nCRITICAL: Convert and state all prices in {state['home_currency']}."
-    
     t_res, b_res, a_res = await asyncio.gather(
         taxi_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         bus_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         app_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
     )
-
     summary = f"Taxi: {t_res['messages'][-1].content}\nBus: {b_res['messages'][-1].content}\nApp: {a_res['messages'][-1].content}\nCRITICAL: Format all final output prices in {state['home_currency']}."
     final = await transport_main_agent.ainvoke({"messages": [HumanMessage(content=summary)]})
     return {"transport_summary": final["messages"][-1].content}
@@ -336,7 +313,6 @@ async def node_activities(state: TravelPlanState):
         activities_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
         culture_executor.ainvoke({"messages": [HumanMessage(content=query)]}),
     )
-
     summary = f"Weather: {w_res['messages'][-1].content}\nActs: {a_res['messages'][-1].content}\nCulture: {c_res['messages'][-1].content}\nCRITICAL: Format any prices mentioned in {state['home_currency']}."
     final = await activity_main_agent.ainvoke({"messages": [HumanMessage(content=summary)]})
     return {"activity_summary": final["messages"][-1].content}
@@ -355,9 +331,9 @@ async def node_currency(state: TravelPlanState):
     return {"currency_summary": ans}
 
 async def node_synthesize(state: TravelPlanState):
-    prompt = f"""
+    # Agent 1: Itinerary (For the Frontend Dashboard)
+    itin_prompt = f"""
     You are a professional travel agent. Provide ONLY a punchy, day-by-day itinerary for the trip strictly in Swedish. 
-    
     CRITICAL INSTRUCTIONS: 
     1. DO NOT summarize or mention the flight details, hotel names, prices, weather forecasts, or currency exchange rates in this output. 
     2. Format each day as a distinct Markdown header (e.g., ### Dag 1 - 20 Aug).
@@ -367,8 +343,34 @@ async def node_synthesize(state: TravelPlanState):
     Transport Context: {state['transport_summary']}
     Activities/Culture Context: {state['activity_summary']}
     """
-    response = await llm.ainvoke([HumanMessage(content=prompt)])
-    return {"final_itinerary": response.content}
+    
+    # Agent 2: Social Media Caption (For Instagram/Facebook API)
+    social_prompt = f"""
+    Kontext om resan (Hämta inspiration härifrån men skriv om det snyggt):
+    {state['activity_summary']}
+
+    Du är en expert på sociala medier för en svensk resebyrå. 
+    Skriv en extremt engagerande, säljande och emoji-rik bildtext för Instagram/Facebook om ett nytt resepaket till {state['destination']}, {state['country']}.
+
+    CRITICAL INSTRUCTIONS 
+    1. Allt ska vara på naturlig svenska
+    2. Börja med en stark, levande inledning/hook baserad på stadens vibbar
+    3. Ta INTE med några info om priser överhuvudtaget 
+    4. Använd fina Emojis istället för fula Markdown-rubriker. ANVÄND ALDRIG "###".
+    5. Strukturera inlägget med: 1. Inledning, 2. Kort om vädret 🌤, 3. "Missa inte:", 4. "💡 Bra att veta:". Men skriv inte "1. Inledning" och "2. Kort om vädret", skriv det på ett naturligt sätt.
+    6. Avsluta ALLTID inlägget med något linknande till denna mening och radbrytning: 
+       "Länk i bion för att se exakta priser, hela resplanen och boka innan priset ändras! ✈️👇"
+    """
+
+    res_itin, res_social = await asyncio.gather(
+        llm.ainvoke([HumanMessage(content=itin_prompt)]),
+        llm.ainvoke([HumanMessage(content=social_prompt)])
+    )
+    
+    return {
+        "final_itinerary": res_itin.content,
+        "social_caption": res_social.content
+    }
 
 # --- 5. GRAPH WIRING ---
 def route_after_deals(state: TravelPlanState) -> Union[List[str], str]:
@@ -396,15 +398,12 @@ app = FastAPI()
 @app.get("/")
 @app.get("/api/generate-trip")
 async def generate_trip(
-    departure_id: str = "ARN", # Updated default to Arlanda for Swedish market
+    departure_id: str = "ARN", 
     travelers: int = 2, 
     duration: str = "2", 
-    home_currency: str = "SEK", # Default remains SEK
+    home_currency: str = "SEK", 
     exclude_destinations: str = "",
 ):
-    """
-    Endpoint to trigger the LangGraph pipeline via SSE.
-    """
     inputs = {
         "departure_id": departure_id,
         "travelers": travelers,
@@ -420,15 +419,12 @@ async def generate_trip(
                 for node_name, node_output in event.items():
                     current_state.update(node_output)
                     
-                    # Yield node status to frontend
                     yield f"data: {json.dumps({'type': 'status', 'node': node_name})}\n\n"
                     
-                    # If trip_deals failed to find a flight, stop early
                     if node_name == "trip_deals" and not current_state.get("destination"):
                         yield f"data: {json.dumps({'type': 'empty'})}\n\n"
                         return
                     
-                    # If synthesize is done, emit the complete payload
                     if node_name == "synthesize":
                         current_state["created_at"] = datetime.now(timezone.utc).isoformat()
                         yield f"data: {json.dumps({'type': 'complete', 'data': current_state})}\n\n"
@@ -437,5 +433,4 @@ async def generate_trip(
             print(f"[generate-trip] EXCEPTION: {e!r}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
-    # StreamingResponse sends chunks in real-time
     return StreamingResponse(event_stream(), media_type="text/event-stream")

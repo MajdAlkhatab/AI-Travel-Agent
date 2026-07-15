@@ -69,7 +69,10 @@ export async function POST(request: Request) {
 
     // 3. Trigger your secure Instagram/Facebook cross-poster
     if (imageUrls.length > 0 && process.env.API_SECRET_KEY) {
-      const socialCaption = `🔥 Nytt supererbjudande: ${curatedDeal.destination}, ${curatedDeal.country}!\n\n✈️ Flyg & hotell säkrat.\n\nSå här är stämningen:\n${curatedDeal.activity_summary}\n\nLänk i bion för att se hela resplanen och boka innan priserna ändras! 🌍✨`;
+      
+      // ANVÄNDER DEN NYA SOCIALA MEDIER-AGENTENS TEXT
+      const socialCaption = curatedDeal.social_caption || `Sugen på en resa? 🌍✨\n\nVi har precis hittat ett supererbjudande till ${curatedDeal.destination}, ${curatedDeal.country}! Flyg & hotell säkrat.\n\nLänk i bion för att se hela resplanen och boka innan priserna ändras! ✈️👇`;
+      
       const economics = getDealEconomics(curatedDeal);
 
       // Extract specific details for images 2 and 3
@@ -107,7 +110,8 @@ export async function POST(request: Request) {
           imageUrls: imageUrls,
           caption: socialCaption,
           economics: economics,
-          tripDetails: tripDetails
+          tripDetails: tripDetails,
+          locationText: `${curatedDeal.destination}, ${curatedDeal.country}` // <--- NYTT: Skickar orten explicit till ritmotorn!
         })
       });
     }

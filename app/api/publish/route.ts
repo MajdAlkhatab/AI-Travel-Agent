@@ -44,7 +44,8 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { imageUrls, caption, economics, tripDetails } = body;
+    // NYTT: Tar emot locationText explicit från body
+    const { imageUrls, caption, economics, tripDetails, locationText: providedLocationText } = body;
 
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0 || !caption) {
       return NextResponse.json({ error: 'Missing imageUrls array or caption in request body' }, { status: 400 });
@@ -60,8 +61,8 @@ export async function POST(request: Request) {
     if (economics && economics.totalCurrent != null) {
       try {
         console.log("Stamping first image with pricing badge...");
-        const locationMatch = caption.match(/🔥 Nytt supererbjudande:\s*(.*?)\s*!/);
-        const locationText = locationMatch ? locationMatch[1].toUpperCase() : '';
+        // NYTT: Använder den explicita texten istället för regex.
+        const locationText = providedLocationText ? providedLocationText.toUpperCase() : '';
         const hasSavings = economics.totalSavingsPercent > 0;
 
         imageUrls[0] = await stampImage(imageUrls[0], {
