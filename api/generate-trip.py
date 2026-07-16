@@ -97,6 +97,40 @@ def flexible_date_range(days_ahead=60):
     end = today + timedelta(days=days_ahead)
     return f"{tomorrow.isoformat()},{end.isoformat()}"
 
+def nights_between(start_str, end_str):
+    """Returns integer nights between two ISO date strings, or None if invalid."""
+    try:
+        s = datetime.fromisoformat(start_str).date()
+        e = datetime.fromisoformat(end_str).date()
+        delta = (e - s).days
+        return delta if delta >= 0 else None
+    except Exception:
+        return None
+
+def filter_weekend_deals(deals, target_outbound, target_return):
+    """
+    NEW: Ensures returned deals actually match a real weekend trip instead of
+    trusting google_flights_deals' loosely-related outbound/return dates.
+
+    Tier 1 (exact): outbound_date/return_date match the exact requested weekend.
+    Tier 2 (fallback): if no exact match, accept deals that are still a short
+    1-3 night trip (i.e. "weekend-ish"), even if not on the exact requested dates.
+    Anything longer (e.g. a 7-8 night deal) is always rejected for the weekend flow.
+    """
+    exact = [
+        f for f in deals
+        if f.get("outbound_date") == target_outbound and f.get("return_date") == target_return
+    ]
+    if exact:
+        return exact
+
+    loose = []
+    for f in deals:
+        n = nights_between(f.get("outbound_date"), f.get("return_date"))
+        if n is not None and 1 <= n <= 3:
+            loose.append(f)
+    return loose
+
 def get_flight_deals(departure_id, outbound_date, return_date=None, travel_duration=None, currency="USD", gl="us", hl="en"):
     params = {
         "engine": "google_flights_deals",
@@ -246,50 +280,98 @@ async def node_trip_deals(state: TravelPlanState):
 
     print(f"[trip-deals] starting run: pref={user_preference} exclude={exclude}")
 
-    # 1. Smart Date Selection
+    departure_ids_to_try = [departure_id] + [d for d in DEPARTURE_FALLBACKS if d != departure_id]
+
+    raw_flight_response = None
+    raw_flights = []
+    eligible_flights = []
+    target_outbound = None
+    target_return = None
+
+    # ------------------------------------------------------------------
+    # 1. Flight Hunt
+    # ------------------------------------------------------------------
     if duration_type == "2":
-        # 🎲 RANDOMLY select just ONE weekend from the next 4 to save API credits and force exact dates
-        weekends = get_upcoming_weekends(4)
-        target_outbound, target_return = random.choice(weekends)
+        # WEEKEND FLOW (NEW):
+        # Try all 4 upcoming weekends (shuffled), and for each weekend try
+        # every fallback airport, until we find flights that actually match
+        # a real weekend trip (exact match, or a 1-3 night fallback match).
+        # This replaces blindly trusting whatever dates google_flights_deals
+        # returns, which previously could hand back trips months away / a
+        # full week long.
         duration_param = None
-        print(f"[trip-deals] Selected Exact Weekend: {target_outbound} to {target_return}")
+        weekends_to_try = get_upcoming_weekends(4)
+        random.shuffle(weekends_to_try)
+
+        for w_outbound, w_return in weekends_to_try:
+            print(f"[trip-deals] Trying Weekend: {w_outbound} to {w_return}")
+            matched_this_weekend = False
+
+            for dep_id in departure_ids_to_try:
+                raw_flight_response = get_flight_deals(dep_id, w_outbound, w_return, duration_param)
+                deals = raw_flight_response.get("deals", [])
+
+                if not deals:
+                    print(f"[trip-deals] no raw deals from {dep_id} for weekend {w_outbound}-{w_return}, trying next fallback airport...")
+                    continue
+
+                candidates = [
+                    f for f in deals
+                    if f.get("outbound_date") and f.get("return_date")
+                    and f.get("country", "").strip().lower() not in exclude
+                ]
+                candidates = filter_weekend_deals(candidates, w_outbound, w_return)
+
+                if candidates:
+                    raw_flights = deals
+                    eligible_flights = candidates
+                    target_outbound, target_return = w_outbound, w_return
+                    matched_this_weekend = True
+                    print(f"[trip-deals] Matched {len(eligible_flights)} eligible weekend flights from {dep_id}")
+                    break
+
+                print(f"[trip-deals] no exact/near weekend match from {dep_id}, trying next fallback airport...")
+
+            if matched_this_weekend:
+                break
+            print(f"[trip-deals] no matching deals for weekend {w_outbound}-{w_return}, trying next candidate weekend...")
+
+        if not eligible_flights:
+            print(f"[trip-deals] FINAL: no matching weekend deals across all weekends/airports")
+            return {"destination": None, "raw_flight_response": raw_flight_response}
+
     else:
-        # Flexible range for exactly 1 week (ignoring 2-week logic)
+        # WEEK FLOW (UNCHANGED): flexible range works fine, leave as-is.
         target_outbound = flexible_date_range(60)
         target_return = None
         duration_param = "1"  # Force 1 week travel duration
         print(f"[trip-deals] Selected Flexible Dates: {target_outbound} (Duration: {duration_param})")
 
-    departure_ids_to_try = [departure_id] + [d for d in DEPARTURE_FALLBACKS if d != departure_id]
-    
-    best_flight = None
-    raw_flight_response = None
-    raw_flights = []
+        for dep_id in departure_ids_to_try:
+            raw_flight_response = get_flight_deals(dep_id, target_outbound, target_return, duration_param)
+            deals = raw_flight_response.get("deals", [])
+            if deals:
+                raw_flights = deals
+                break
+            print(f"[trip-deals] no eligible flight from {dep_id}, trying next fallback airport...")
 
-    # 2. Flight Hunt
-    for dep_id in departure_ids_to_try:
-        raw_flight_response = get_flight_deals(dep_id, target_outbound, target_return, duration_param)
-        deals = raw_flight_response.get("deals", [])
-        if deals:
-            raw_flights = deals
-            break
-        print(f"[trip-deals] no eligible flight from {dep_id}, trying next fallback airport...")
+        if not raw_flights:
+            print(f"[trip-deals] FINAL: no deals found across {departure_ids_to_try}")
+            return {"destination": None, "raw_flight_response": raw_flight_response}
 
-    if not raw_flights:
-        print(f"[trip-deals] FINAL: no deals found across {departure_ids_to_try}")
-        return {"destination": None, "raw_flight_response": raw_flight_response}
+        eligible_flights = [
+            f for f in raw_flights 
+            if f.get("outbound_date") and f.get("return_date") 
+            and f.get("country", "").strip().lower() not in exclude
+        ]
 
-    eligible_flights = [
-        f for f in raw_flights 
-        if f.get("outbound_date") and f.get("return_date") 
-        and f.get("country", "").strip().lower() not in exclude
-    ]
+        if not eligible_flights:
+            print(f"[trip-deals] FINAL: no eligible deals after exclusions")
+            return {"destination": None, "raw_flight_response": raw_flight_response}
 
-    if not eligible_flights:
-        print(f"[trip-deals] FINAL: no eligible deals after exclusions")
-        return {"destination": None, "raw_flight_response": raw_flight_response}
-
-    # 3. AI-Powered Filtering & Ranking
+    # ------------------------------------------------------------------
+    # 2. AI-Powered Filtering & Ranking (unchanged)
+    # ------------------------------------------------------------------
     raw_city_list = [f.get("name") for f in eligible_flights if f.get("name")]
     prompt_modifier = (
         "the most popular beach and summer destinations" if user_preference == "beach" 
@@ -314,7 +396,9 @@ async def node_trip_deals(state: TravelPlanState):
         print(f"[trip-deals] FINAL: AI filtered out all cities")
         return {"destination": None, "raw_flight_response": raw_flight_response}
 
-    # 4. Locking in the Destination
+    # ------------------------------------------------------------------
+    # 3. Locking in the Destination (unchanged)
+    # ------------------------------------------------------------------
     target_city_lower = ranked_cities[0].lower()
     flights_to_winner = [f for f in eligible_flights if f.get("name", "").lower() == target_city_lower]
     flights_to_winner = sorted(flights_to_winner, key=lambda d: d.get("discount_percentage", 0), reverse=True)
@@ -324,12 +408,17 @@ async def node_trip_deals(state: TravelPlanState):
 
     best_flight = flights_to_winner[0]
     city, country = best_flight["name"], best_flight["country"]
+    # NOTE: check_in/check_out still come from the winning flight's own dates.
+    # Because eligible_flights is now pre-filtered (exact or 1-3 night match),
+    # this guarantees hotel nights always match a real short trip.
     check_in, check_out = best_flight["outbound_date"], best_flight["return_date"]
 
     dest_query = f"{city} {country} tourism landmarks high quality"
     destination_images = get_destination_images(dest_query, max_images=5)
 
-    # 5. The Ultimate Hotel Judge
+    # ------------------------------------------------------------------
+    # 4. The Ultimate Hotel Judge (unchanged)
+    # ------------------------------------------------------------------
     hotel_area = await get_best_hotel_area(city, country)
     raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
     hotels = raw_hotel_response.get("properties", [])
@@ -378,7 +467,7 @@ async def node_trip_deals(state: TravelPlanState):
         # Store verdict to display on the frontend if needed
         best_hotel['deal_description'] = winning_hotel_eval.verdict 
 
-    print(f"[trip-deals] FINAL: {city}, {country} | hotel={'yes' if best_hotel else 'none found'}")
+    print(f"[trip-deals] FINAL: {city}, {country} | dates={check_in} to {check_out} | hotel={'yes' if best_hotel else 'none found'}")
     
     return {
         "flight": best_flight,
