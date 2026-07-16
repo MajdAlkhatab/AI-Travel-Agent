@@ -1,55 +1,57 @@
+import PageLayout from '@/app/components/PageLayout';
+
 export default function TermsOfService() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-16 bg-white text-black font-sans">
-      <h1 className="text-3xl font-bold text-black mb-8">Terms of Service for ResaRea</h1>
-      <p className="text-sm text-gray-500 mb-10">Last Updated: July 14, 2026</p>
+    <PageLayout>
+      <h1 className="text-3xl font-bold text-black mb-8">Användarvillkor för ResaRea</h1>
+      <p className="text-sm text-gray-500 mb-10">Senast uppdaterad: 14 juli 2026</p>
 
-      <div className="space-y-8 leading-relaxed">
+      <div className="space-y-8 leading-relaxed text-gray-800">
         <section>
-          <h2 className="text-xl font-semibold text-gray-900 mb-3">1. Acceptance of Terms</h2>
-          <p>By accessing or using ResaRea, you agree to be bound by these Terms of Service. If you do not agree with any part of these terms, you may not use our service.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">1. Godkännande av villkor</h2>
+          <p>Genom att använda ResaRea godkänner du att vara bunden av dessa användarvillkor. Om du inte håller med om någon del av dessa villkor får du inte använda vår tjänst.</p>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-gray-900 mb-3">2. Description of Service</h2>
-          <p>ResaRea is an automated platform that aggregates public travel data, flight prices, and hotel deals, generating AI-powered itineraries and publishing them to social media platforms.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">2. Beskrivning av tjänsten</h2>
+          <p>ResaRea är en automatiserad plattform som samlar in offentlig resedata, flygpriser och hotellerbjudanden, genererar AI-drivna resplaner och publicerar dem på sociala medieplattformar.</p>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-gray-900 mb-3">3. Accuracy of Information</h2>
-          <p>While we strive to provide the best and most accurate travel deals, all prices, flight availability, and hotel discounts are subject to change without notice. ResaRea does not guarantee that the prices displayed on our website or social media channels will remain available by the time you attempt to book. We are not a booking agent and hold no liability for price fluctuations or booking errors.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">3. Informationens riktighet</h2>
+          <p>Även om vi strävar efter att tillhandahålla de bästa och mest exakta reseerbjudandena, kan alla priser, flygtillgänglighet och hotellrabatter ändras utan föregående meddelande. ResaRea garanterar inte att de priser som visas på vår webbplats eller i våra sociala mediekanaler kommer att finnas kvar när du försöker boka. Vi är ingen bokningsagent och tar inget ansvar för prisfluktuationer eller bokningsfel.</p>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-gray-900 mb-3">4. Acceptable Use</h2>
-          <p>You agree not to misuse the ResaRea platform. You shall not:</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">4. Acceptabel användning</h2>
+          <p>Du förbinder dig att inte missbruka ResaRea-plattformen. Du får inte:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li>Attempt to reverse engineer, scrape, or overload our APIs or servers.</li>
-            <li>Use our platform to distribute spam or malicious content.</li>
-            <li>Interfere with the automated social media publishing features of the application.</li>
+            <li>Försöka bakåtkompilera (reverse engineer), skrapa (scrape) eller överbelasta våra API:er eller servrar.</li>
+            <li>Använda vår plattform för att distribuera skräppost eller skadligt innehåll.</li>
+            <li>Störa de automatiserade funktionerna för publicering på sociala medier i applikationen.</li>
           </ul>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-gray-900 mb-3">5. Third-Party Links and Integrations</h2>
-          <p>Our service contains links to third-party booking websites (e.g., airlines, hotels) and integrates with social media networks. We do not control these external sites and are not responsible for their content, policies, or the transactions you execute with them.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">5. Länkar och integrationer med tredje part</h2>
+          <p>Vår tjänst innehåller länkar till tredje parts bokningswebbplatser (t.ex. flygbolag, hotell) och integreras med sociala nätverk. Vi kontrollerar inte dessa externa webbplatser och ansvarar inte för deras innehåll, policyer eller de transaktioner du utför med dem.</p>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-gray-900 mb-3">6. Limitation of Liability</h2>
-          <p>To the maximum extent permitted by law, ResaRea and its developers shall not be liable for any indirect, incidental, special, or consequential damages resulting from your use of the service or reliance on the travel deals provided.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">6. Ansvarsbegränsning</h2>
+          <p>I den utsträckning som lagen tillåter ska ResaRea och dess utvecklare inte hållas ansvariga för några indirekta, tillfälliga, särskilda eller följdskador som uppstår på grund av din användning av tjänsten eller din tillit till de reseerbjudanden som tillhandahålls.</p>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Changes to Terms</h2>
-          <p>We reserve the right to modify or replace these Terms at any time. Continued use of ResaRea after any such changes constitutes your consent to such changes.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Ändringar av villkoren</h2>
+          <p>Vi förbehåller oss rätten att ändra eller ersätta dessa villkor när som helst. Fortsatt användning av ResaRea efter sådana ändringar utgör ditt samtycke till dessa ändringar.</p>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Contact Us</h2>
-          <p>If you have any questions about these Terms, please contact us by sending a direct message to our official TikTok account at <strong>@ResaRea4</strong>.</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Kontakta oss</h2>
+          <p>Om du har några frågor om dessa villkor, vänligen kontakta oss genom att skicka ett direktmeddelande till vårt officiella TikTok-konto på <strong>@ResaRea4</strong>.</p>
         </section>
       </div>
-    </div>
+    </PageLayout>
   );
 }
