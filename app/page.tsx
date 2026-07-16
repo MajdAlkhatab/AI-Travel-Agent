@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import {
   Radar, Plane, BedDouble, Bus, Compass, Coins, Sparkles,
   CheckCircle2, Clock, X, AlertTriangle, RefreshCw,
@@ -1126,6 +1127,22 @@ export default function Home() {
         </div>
         );
       })()}
+      <footer className="max-w-6xl mx-auto mt-20 pt-8 border-t border-gray-200 text-sm text-gray-500 flex flex-col md:flex-row justify-between items-center gap-4 pb-4">
+        <div>
+          © {new Date().getFullYear()} TripHunter. Alla rättigheter förbehållna.
+        </div>
+        <div className="flex items-center gap-6 font-medium">
+          <Link href="/about_us" className="hover:text-emerald-600 transition-colors">
+            Om oss
+          </Link>
+          <Link href="/privacy" className="hover:text-emerald-600 transition-colors">
+            Integritetspolicy
+          </Link>
+          <Link href="/tos" className="hover:text-emerald-600 transition-colors">
+            Användarvillkor
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }
