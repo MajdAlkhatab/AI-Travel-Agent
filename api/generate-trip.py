@@ -285,9 +285,16 @@ async def node_trip_deals(state: TravelPlanState):
         and f.get("country", "").strip().lower() not in exclude
     ]
 
+    # --- RELAX CONSTRAINT 1: If exclude list killed all flights, ignore exclude list
     if not eligible_flights:
-        print(f"[trip-deals] FINAL: no eligible deals after exclusions")
-        return {"destination": None, "raw_flight_response": raw_flight_response}
+        print(f"[trip-deals] All flights excluded. Relaxing exclude constraint...")
+        eligible_flights = [
+            f for f in raw_flights 
+            if f.get("outbound_date") and f.get("return_date")
+        ]
+        if not eligible_flights:
+            print(f"[trip-deals] FINAL: no eligible deals even after relaxing exclusions")
+            return {"destination": None, "raw_flight_response": raw_flight_response}
 
     # 3. AI-Powered Filtering & Ranking
     raw_city_list = [f.get("name") for f in eligible_flights if f.get("name")]
@@ -310,9 +317,27 @@ async def node_trip_deals(state: TravelPlanState):
     res_cities = await filter_llm.ainvoke(prompt)
     ranked_cities = res_cities.cities
 
+    # --- RELAX CONSTRAINT 2: If AI found no matching cities, ask for generic top destinations
     if not ranked_cities:
-        print(f"[trip-deals] FINAL: AI filtered out all cities")
-        return {"destination": None, "raw_flight_response": raw_flight_response}
+        print(f"[trip-deals] AI found no matches for {user_preference}. Relaxing vibe constraint...")
+        fallback_prompt = f"""
+        Here is a raw list of destination cities pulled from our flight data (duplicates included): 
+        {raw_city_list}
+
+        Which of these cities are the best general tourist destinations? 
+        Return ONLY the cities from this list that match the criteria. 
+        Order the final list strictly from MOST popular to LEAST popular. 
+        Ensure there are NO DUPLICATES in your final returned list.
+        """
+        res_cities_fallback = await filter_llm.ainvoke(fallback_prompt)
+        ranked_cities = res_cities_fallback.cities
+        
+        # --- RELAX CONSTRAINT 3 (NUCLEAR): If AI STILL fails, just take the raw list
+        if not ranked_cities:
+            print(f"[trip-deals] AI fallback failed. Using raw city list.")
+            ranked_cities = list(set(raw_city_list))
+            if not ranked_cities:
+                return {"destination": None, "raw_flight_response": raw_flight_response}
 
     # 4. Locking in the Destination
     target_city_lower = ranked_cities[0].lower()
