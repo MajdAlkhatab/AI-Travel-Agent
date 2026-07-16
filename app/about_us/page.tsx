@@ -1,7 +1,7 @@
 export default function About() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-16 text-gray-800 font-sans">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Om oss</h1>
+    <div className="max-w-3xl mx-auto px-6 py-16 bg-white text-black font-sans">
+        <h1 className="text-3xl font-bold text-black mb-8">Om oss</h1>
 
       <div className="space-y-6 leading-relaxed">
         <p>

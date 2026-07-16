@@ -1,7 +1,7 @@
 export default function PrivacyPolicy() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-16 text-gray-800 font-sans">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy for TripHunter</h1>
+    <div className="max-w-3xl mx-auto px-6 py-16 bg-white text-black font-sans">
+      <h1 className="text-3xl font-bold text-black mb-8">Privacy Policy for TripHunter</h1>
       <p className="text-sm text-gray-500 mb-10">Last Updated: July 14, 2026</p>
 
       <div className="space-y-8 leading-relaxed">
