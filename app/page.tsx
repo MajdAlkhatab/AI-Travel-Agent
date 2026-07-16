@@ -8,7 +8,7 @@ import {
   Radar, Plane, BedDouble, Bus, Compass, Coins, Sparkles,
   CheckCircle2, Clock, X, AlertTriangle, RefreshCw,
   Car, Smartphone, CloudSun, Map, BookOpen,
-  Instagram, Facebook
+  Instagram, Facebook, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 interface Flight {
@@ -551,6 +551,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
   const [showTriggerForm, setShowTriggerForm] = useState(false);
+  const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null); // NEW: Fullscreen state
   
   // Default currency now set to SEK for the Swedish market
   const [displayCurrency, setDisplayCurrency] = useState('SEK');
@@ -561,7 +562,7 @@ export default function Home() {
     travelers: 2,
     duration: '2',
     homeCurrency: 'SEK', 
-    userPreference: 'beach', // NEW: Added user preference state
+    userPreference: 'beach',
   });
 
   const [pipelinePhase, setPipelinePhase] = useState<Phase>('idle');
@@ -626,7 +627,7 @@ export default function Home() {
         travelers: String(params.travelers),
         duration: params.duration,
         home_currency: params.homeCurrency,
-        user_preference: params.userPreference, // NEW: Added preference parameter
+        user_preference: params.userPreference, 
         exclude_destinations: recentCountries, 
       }).toString()}`;
       
@@ -635,7 +636,6 @@ export default function Home() {
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const rawData = await response.json();
-        
         const dealData = rawData.data || rawData;
 
         if (runIdRef.current !== runId) return;
@@ -644,7 +644,6 @@ export default function Home() {
         setPipelinePhase('done');
         setDeals(prev => [dealData, ...prev].slice(0, 60));
 
-        // Fire the backend storage and social publisher instantly
         await fetch('/api/save-and-publish', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -653,7 +652,6 @@ export default function Home() {
         return;
       }
 
-      // --- FALLBACK: STREAMING SSE HANDLING ---
       if (!response.body) throw new Error("No readable stream available");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -705,7 +703,6 @@ export default function Home() {
         }
       }
 
-      // Process any leftover buffered data string at the end of the stream
       if (partialData.trim().startsWith('data: ')) {
         const payload = JSON.parse(partialData.trim().substring(6));
         handlePayload(payload);
@@ -717,7 +714,6 @@ export default function Home() {
       setPipelinePhase('error');
     }
   };
-
 
   const closePipeline = () => {
     runIdRef.current++;
@@ -1024,135 +1020,186 @@ export default function Home() {
       {selectedDeal && (() => {
         const econ = getDealEconomics(selectedDeal);
         
-        // Extract destination images and prioritize high-res hotel images for the gallery
         const destImgs = selectedDeal.destination_images || [];
         const fallbackDestImgs = destImgs.length === 0 && selectedDeal.flight?.thumbnail ? [selectedDeal.flight.thumbnail] : destImgs;
         const hotelImgs = selectedDeal.hotel?.images?.map(img => img.original_image || img.thumbnail) || [];
         const combinedGalleryImages = [...fallbackDestImgs, ...hotelImgs].filter(Boolean);
 
         return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setSelectedDeal(null)}>
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-gray-100" onClick={(e) => e.stopPropagation()}>
-            <div className="relative h-56 flex-shrink-0 rounded-t-2xl overflow-hidden bg-slate-900">
-              
-              {/* Swipeable Gallery */}
-              {combinedGalleryImages.length > 0 ? (
-                <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar">
-                  {combinedGalleryImages.map((url, i) => (
-                    <img 
-                      key={i} 
-                      src={url} 
-                      alt={`${selectedDeal.destination} bild ${i + 1}`} 
-                      className="w-full h-full object-cover flex-shrink-0 snap-center" 
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900" />
-              )}
-              
-              {/* Overlays (Pointer-events-none ensures the user can drag/scroll the images underneath) */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
-              <button onClick={() => setSelectedDeal(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-gray-600 font-semibold transition-colors z-10">✕</button>
-              <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-none">
-                <h2 className="text-white text-2xl font-semibold tracking-tight">{selectedDeal.destination}, {selectedDeal.country}</h2>
-                <p className="text-white/80 text-sm mt-1">{selectedDeal.flight?.highlights || 'Fullständig AI-genererad resplan'}</p>
-                {combinedGalleryImages.length > 1 && (
-                  <p className="text-white/60 text-xs mt-2 uppercase tracking-widest">Gallerivisning • Svep höger ➔</p>
+        <>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setSelectedDeal(null)}>
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-gray-100" onClick={(e) => e.stopPropagation()}>
+              <div className="relative h-56 flex-shrink-0 rounded-t-2xl overflow-hidden bg-slate-900 group">
+                
+                {/* Swipeable Gallery with click-to-fullscreen */}
+                {combinedGalleryImages.length > 0 ? (
+                  <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar">
+                    {combinedGalleryImages.map((url, i) => (
+                      <img 
+                        key={i} 
+                        src={url} 
+                        alt={`${selectedDeal.destination} bild ${i + 1}`} 
+                        className="w-full h-full object-cover flex-shrink-0 snap-center cursor-zoom-in hover:opacity-90 transition-opacity" 
+                        onClick={() => setFullscreenIndex(i)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900" />
                 )}
+                
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
+                <button onClick={() => setSelectedDeal(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-gray-600 font-semibold transition-colors z-10">✕</button>
+                <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-none">
+                  <h2 className="text-white text-2xl font-semibold tracking-tight">{selectedDeal.destination}, {selectedDeal.country}</h2>
+                  <p className="text-white/80 text-sm mt-1">{selectedDeal.flight?.highlights || 'Fullständig AI-genererad resplan'}</p>
+                  {combinedGalleryImages.length > 1 && (
+                    <p className="text-white/60 text-xs mt-2 uppercase tracking-widest">Klicka för fullskärm ⤢</p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="flex border-b border-gray-100 px-6 pt-2 shrink-0 bg-white">
-              <button onClick={() => setActiveTab('overview')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'overview' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Översikt</button>
-              <button onClick={() => setActiveTab('guide')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'guide' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Lokalguide</button>
-              <button onClick={() => setActiveTab('daily_plan')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Dagsschema</button>
-            </div>
+              <div className="flex border-b border-gray-100 px-6 pt-2 shrink-0 bg-white">
+                <button onClick={() => setActiveTab('overview')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'overview' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Översikt</button>
+                <button onClick={() => setActiveTab('guide')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'guide' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Lokalguide</button>
+                <button onClick={() => setActiveTab('daily_plan')} className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'daily_plan' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>Dagsschema</button>
+              </div>
 
-            <div className="p-6 overflow-y-auto text-sm text-gray-700 leading-relaxed rounded-b-2xl bg-white">
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex justify-between items-end mb-3">
-                      <h3 className="font-semibold text-gray-900 text-base">Prisuppdelning</h3>
-                      {selectedDeal.currency_summary && (
-                        <span className="text-xs font-medium text-gray-400 flex items-center gap-1 cursor-help hover:text-gray-600 transition-colors" title={selectedDeal.currency_summary}>
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
-                          Aktuella kurser
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2">
-                      <PriceLine label={`Flyg · ${selectedDeal.flight?.airline || 'Flygbolag'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} rates={latestRates} />
-                      <PriceLine label={`Hotell${econ.nights ? ` · ${econ.nights} natt${econ.nights === 1 ? '' : 'er'}` : ''}`} current={econ.hotelTotalCurrent} original={econ.hotelTotalOriginal} currency={displayCurrency} rates={latestRates} />
-                      <div className="pt-2 border-t border-gray-200">
-                        <PriceLine label="Totalt" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} rates={latestRates} emphasize />
-                      </div>
-                      {econ.hasSavings && (
-                        <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2 mt-1">
-                          <span className="text-xs font-medium text-green-800">Du sparar</span>
-                          <span className="text-sm font-semibold text-green-900">
-                            {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
-                            {econ.totalSavingsPercent != null && <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>}
+              <div className="p-6 overflow-y-auto text-sm text-gray-700 leading-relaxed rounded-b-2xl bg-white">
+                {activeTab === 'overview' && (
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex justify-between items-end mb-3">
+                        <h3 className="font-semibold text-gray-900 text-base">Prisuppdelning</h3>
+                        {selectedDeal.currency_summary && (
+                          <span className="text-xs font-medium text-gray-400 flex items-center gap-1 cursor-help hover:text-gray-600 transition-colors" title={selectedDeal.currency_summary}>
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
+                            Aktuella kurser
                           </span>
+                        )}
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-2">
+                        <PriceLine label={`Flyg · ${selectedDeal.flight?.airline || 'Flygbolag'}`} current={econ.flightCurrent} original={econ.flightOriginal} currency={displayCurrency} rates={latestRates} />
+                        <PriceLine label={`Hotell${econ.nights ? ` · ${econ.nights} natt${econ.nights === 1 ? '' : 'er'}` : ''}`} current={econ.hotelTotalCurrent} original={econ.hotelTotalOriginal} currency={displayCurrency} rates={latestRates} />
+                        <div className="pt-2 border-t border-gray-200">
+                          <PriceLine label="Totalt" current={econ.totalCurrent} original={econ.hasSavings ? econ.totalOriginal : null} currency={displayCurrency} rates={latestRates} emphasize />
+                        </div>
+                        {econ.hasSavings && (
+                          <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2 mt-1">
+                            <span className="text-xs font-medium text-green-800">Du sparar</span>
+                            <span className="text-sm font-semibold text-green-900">
+                              {formatPrice(econ.totalSavings!, displayCurrency, latestRates)}
+                              {econ.totalSavingsPercent != null && <span className="font-medium text-green-700 ml-1">({econ.totalSavingsPercent}%)</span>}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3 mt-4">
+                        {selectedDeal.flight?.flight_link && <a href={selectedDeal.flight.flight_link} target="_blank" rel="noopener noreferrer" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors">Boka flyg</a>}
+                        {selectedDeal.hotel?.name && <a href={selectedDeal.hotel?.link || `https://www.google.com/travel/search?q=${encodeURIComponent(`${selectedDeal.hotel.name} ${selectedDeal.destination} ${selectedDeal.country}`)}`} target="_blank" rel="noopener noreferrer" className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white text-center py-2.5 rounded-xl font-medium transition-colors">Boka hotell</a>}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-5">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{selectedDeal.hotel?.name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <StarRating rating={selectedDeal.hotel?.overall_rating} />
+                          {selectedDeal.hotel?.overall_rating && <span className="text-gray-400 text-xs">({selectedDeal.hotel?.reviews ?? 0})</span>}
+                        </div>
+                        {selectedDeal.hotel?.deal_description && <span className="inline-block text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full mt-1.5">{selectedDeal.hotel.deal_description}</span>}
+                      </div>
+
+                      <p className="text-gray-500 mt-3">Reseperiod: {selectedDeal.start_date} till {selectedDeal.end_date} • 👥 {selectedDeal.travelers || 2} personer • ✈️ {selectedDeal.flight?.departure_airport_code || 'Avresa'} → {selectedDeal.flight?.arrival_airport_code || 'Dest'}</p>
+
+                      {selectedDeal.hotel?.amenities && selectedDeal.hotel.amenities.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          {selectedDeal.hotel.amenities.map((a, i) => <span key={i} className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">{a}</span>)}
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
 
-                    <div className="flex gap-3 mt-4">
-                      {selectedDeal.flight?.flight_link && <a href={selectedDeal.flight.flight_link} target="_blank" rel="noopener noreferrer" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-center py-2.5 rounded-xl font-medium transition-colors">Boka flyg</a>}
-                      {selectedDeal.hotel?.name && <a href={selectedDeal.hotel?.link || `https://www.google.com/travel/search?q=${encodeURIComponent(`${selectedDeal.hotel.name} ${selectedDeal.destination} ${selectedDeal.country}`)}`} target="_blank" rel="noopener noreferrer" className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white text-center py-2.5 rounded-xl font-medium transition-colors">Boka hotell</a>}
+                {activeTab === 'daily_plan' && (
+                  <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100">
+                    <h3 className="font-semibold text-emerald-950 text-base mb-2">Föreslaget dagsschema</h3>
+                    <FormattedText text={selectedDeal.final_itinerary} />
+                  </div>
+                )}
+
+                {activeTab === 'guide' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-base mb-2">Valuta & Växlingskurs</h3>
+                      <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-gray-700">{selectedDeal.currency_summary}</div>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-base mb-2">Flygplats- & Hotelltransfer</h3>
+                      <div className="bg-gray-50 rounded-xl p-4 border border-gray-100"><FormattedText text={selectedDeal.transport_summary} /></div>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-base mb-2">Aktiviteter & lokal kultur</h3>
+                      <div className="bg-gray-50 rounded-xl p-4 border border-gray-100"><FormattedText text={selectedDeal.activity_summary} /></div>
                     </div>
                   </div>
-
-                  <div className="border-t border-gray-100 pt-5">
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{selectedDeal.hotel?.name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <StarRating rating={selectedDeal.hotel?.overall_rating} />
-                        {selectedDeal.hotel?.overall_rating && <span className="text-gray-400 text-xs">({selectedDeal.hotel?.reviews ?? 0})</span>}
-                      </div>
-                      {selectedDeal.hotel?.deal_description && <span className="inline-block text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full mt-1.5">{selectedDeal.hotel.deal_description}</span>}
-                    </div>
-
-                    <p className="text-gray-500 mt-3">Reseperiod: {selectedDeal.start_date} till {selectedDeal.end_date} • 👥 {selectedDeal.travelers || 2} personer • ✈️ {selectedDeal.flight?.departure_airport_code || 'Avresa'} → {selectedDeal.flight?.arrival_airport_code || 'Dest'}</p>
-
-                    {selectedDeal.hotel?.amenities && selectedDeal.hotel.amenities.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-3">
-                        {selectedDeal.hotel.amenities.map((a, i) => <span key={i} className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">{a}</span>)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'daily_plan' && (
-                <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100">
-                  <h3 className="font-semibold text-emerald-950 text-base mb-2">Föreslaget dagsschema</h3>
-                  <FormattedText text={selectedDeal.final_itinerary} />
-                </div>
-              )}
-
-              {activeTab === 'guide' && (
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 text-base mb-2">Valuta & Växlingskurs</h3>
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-gray-700">{selectedDeal.currency_summary}</div>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 text-base mb-2">Flygplats- & Hotelltransfer</h3>
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100"><FormattedText text={selectedDeal.transport_summary} /></div>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 text-base mb-2">Aktiviteter & lokal kultur</h3>
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100"><FormattedText text={selectedDeal.activity_summary} /></div>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
+
+          {/* NEW: Fullscreen Lightbox Overlay */}
+          {fullscreenIndex !== null && combinedGalleryImages.length > 0 && (
+            <div 
+              className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center backdrop-blur-md transition-opacity"
+              onClick={() => setFullscreenIndex(null)}
+            >
+              <button 
+                className="absolute top-4 right-4 text-white/70 hover:text-white p-2 z-10 transition-colors"
+                onClick={() => setFullscreenIndex(null)}
+              >
+                <X size={32} />
+              </button>
+
+              {combinedGalleryImages.length > 1 && (
+                <button 
+                  className="absolute left-4 top-1/2 -translate-y-1/2 p-3 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-colors z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFullscreenIndex(prev => prev === null ? 0 : (prev === 0 ? combinedGalleryImages.length - 1 : prev - 1));
+                  }}
+                >
+                  <ChevronLeft size={36} />
+                </button>
+              )}
+
+              <img 
+                src={combinedGalleryImages[fullscreenIndex]} 
+                alt="Full screen view" 
+                className="max-w-[90vw] max-h-[90vh] object-contain select-none"
+                onClick={(e) => e.stopPropagation()} 
+              />
+
+              {combinedGalleryImages.length > 1 && (
+                <button 
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-3 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-colors z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFullscreenIndex(prev => prev === null ? 0 : (prev === combinedGalleryImages.length - 1 ? 0 : prev + 1));
+                  }}
+                >
+                  <ChevronRight size={36} />
+                </button>
+              )}
+
+              <div className="absolute bottom-6 text-white/50 text-sm font-medium tracking-widest z-10">
+                {fullscreenIndex + 1} / {combinedGalleryImages.length}
+              </div>
+            </div>
+          )}
+        </>
         );
       })()}
 
