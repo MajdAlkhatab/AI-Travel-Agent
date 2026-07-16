@@ -968,6 +968,7 @@ export default function Home() {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="1">1 Vecka</option>
+                    <option value="2">Helg</option>
                   </select>
                 </div>
               </div>
