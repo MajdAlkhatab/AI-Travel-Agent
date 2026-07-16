@@ -969,7 +969,6 @@ export default function Home() {
                   >
                     <option value="2">Helg</option>
                     <option value="1">1 Vecka</option>
-                    <option value="3">2 Veckor</option>
                   </select>
                 </div>
               </div>
