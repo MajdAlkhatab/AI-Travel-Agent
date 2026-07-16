@@ -7,7 +7,8 @@ import Link from 'next/link';
 import {
   Radar, Plane, BedDouble, Bus, Compass, Coins, Sparkles,
   CheckCircle2, Clock, X, AlertTriangle, RefreshCw,
-  Car, Smartphone, CloudSun, Map, BookOpen 
+  Car, Smartphone, CloudSun, Map, BookOpen,
+  Instagram, Facebook
 } from 'lucide-react';
 
 interface Flight {
@@ -733,47 +734,42 @@ export default function Home() {
   const latestRates = deals[0]?.exchange_rates || { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900 font-sans">
-      
-      {/* 1. WRAPPA BEFINTLIGT INNEHÅLL I MAIN */}
-      <main className="flex-grow p-6 md:p-12">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <Logo />
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            
-            {/* 2. NYA SOCIALA MEDIER I HEADERN */}
-            <div className="hidden md:flex items-center gap-3 mr-2">
-              <a href="https://www.instagram.com/resarea.se/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-emerald-600 transition-colors">
-                <Instagram size={22} />
-              </a>
-              <a href="https://www.facebook.com/ResaRea.se" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-emerald-600 transition-colors">
-                <Facebook size={22} />
-              </a>
-            </div>
-            
-            <NextScanPill />
-            <select
-              value={displayCurrency}
-              onChange={(e) => setDisplayCurrency(e.target.value)}
-              className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="SEK">SEK (kr)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="USD">USD ($)</option>
-              <option value="GBP">GBP (£)</option>
-            </select>
-            <button
-              onClick={() => setShowTriggerForm(true)}
-              disabled={isPipelineBusy}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
-            >
-              <Radar size={15} className="text-green-400" />
-              {isPipelineBusy ? 'Söker...' : 'Hitta supererbjudanden'}
-            </button>
+    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-6 md:p-12">
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <Logo />
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          
+          <div className="hidden md:flex items-center gap-3 mr-2 border-r border-gray-200 pr-4">
+            <a href="https://www.instagram.com/resarea.se/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-600 transition-colors">
+              <Instagram size={20} />
+            </a>
+            <a href="https://www.facebook.com/ResaRea.se" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors">
+              <Facebook size={20} />
+            </a>
           </div>
+
+          <NextScanPill />
+
+          <select
+            value={displayCurrency}
+            onChange={(e) => setDisplayCurrency(e.target.value)}
+            className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="SEK">SEK (kr)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="USD">USD ($)</option>
+            <option value="GBP">GBP (£)</option>
+          </select>
+          <button
+            onClick={() => setShowTriggerForm(true)}
+            disabled={isPipelineBusy}
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+          >
+            <Radar size={15} className="text-green-400" />
+            {isPipelineBusy ? 'Söker...' : 'Hitta supererbjudanden'}
+          </button>
         </div>
-        
-      </main> 
+      </div>
 
       {pipelinePhase !== 'idle' && (
         <PipelineStrip
@@ -1143,48 +1139,28 @@ export default function Home() {
         </div>
         );
       })()}
-    {/* 3. PROFFSIG & STOR FOOTER */}
-      <footer className="bg-slate-950 text-slate-300 py-16 px-6 md:px-12 border-t border-slate-900 mt-auto">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
-          
-          {/* Vänster: Logga & Kort Info */}
-          <div className="flex flex-col items-center md:items-start gap-4">
-            <Logo />
-            <p className="text-sm text-slate-500 max-w-xs text-center md:text-left">
-              Vi använder AI för att automatiskt söka igenom nätet och hitta de mest prisvärda och unika resorna.
-            </p>
-          </div>
 
-          {/* Mitten: Länkar till dina sidor */}
-          <div className="flex flex-col md:flex-row gap-6 text-sm font-semibold tracking-wide">
-            <Link href="/about_us" className="hover:text-emerald-400 transition-colors">
-              Om oss
-            </Link>
-            <Link href="/privacy" className="hover:text-emerald-400 transition-colors">
-              Integritetspolicy
-            </Link>
-            <Link href="/tos" className="hover:text-emerald-400 transition-colors">
-              Användarvillkor
-            </Link>
-          </div>
-
-          {/* Höger: Sociala Medier & Copyright */}
-          <div className="flex flex-col items-center md:items-end gap-5">
-            <div className="flex gap-4">
-              <a href="https://www.instagram.com/resarea.se/" target="_blank" rel="noopener noreferrer" className="bg-slate-900 p-3 rounded-full hover:bg-emerald-600 hover:text-white transition-all border border-slate-800">
-                <Instagram size={22} />
-              </a>
-              <a href="https://www.facebook.com/ResaRea.se" target="_blank" rel="noopener noreferrer" className="bg-slate-900 p-3 rounded-full hover:bg-emerald-600 hover:text-white transition-all border border-slate-800">
-                <Facebook size={22} />
-              </a>
-            </div>
-            <p className="text-xs text-slate-600 font-medium tracking-wide">
-              © {new Date().getFullYear()} ResaRea.se. All rights reserved.
-            </p>
-          </div>
-          
+      <footer className="max-w-6xl mx-auto mt-20 pt-8 pb-12 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-6 text-sm text-gray-500">
+        <div className="flex flex-wrap justify-center items-center gap-6 font-medium">
+          <Link href="/about_us" className="hover:text-emerald-600 transition-colors">Om oss</Link>
+          <Link href="/privacy" className="hover:text-emerald-600 transition-colors">Integritetspolicy</Link>
+          <Link href="/tos" className="hover:text-emerald-600 transition-colors">Användarvillkor</Link>
+        </div>
+        
+        <div className="flex items-center gap-5">
+          <a href="https://www.instagram.com/resarea.se/" target="_blank" rel="noopener noreferrer" className="hover:text-pink-600 transition-colors" aria-label="Instagram">
+            <Instagram size={22} />
+          </a>
+          <a href="https://www.facebook.com/ResaRea.se" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors" aria-label="Facebook">
+            <Facebook size={22} />
+          </a>
+        </div>
+        
+        <div className="text-gray-400">
+          &copy; {new Date().getFullYear()} ResaRea.se. Alla rättigheter reserverade.
         </div>
       </footer>
+
     </div>
   );
 }
