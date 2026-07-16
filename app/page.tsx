@@ -238,12 +238,12 @@ function Logo() {
   return (
     <div className="flex items-center gap-2.5">
       <div className="relative w-9 h-9 flex items-center justify-center rounded-full bg-slate-950 flex-shrink-0">
-        <span className="absolute inset-0 rounded-full border border-red-400 opacity-60" />
-        <Radar size={17} className="text-red-400" strokeWidth={2.25} />
+        <span className="absolute inset-0 rounded-full border border-orange-400 opacity-60" />
+        <Radar size={17} className="text-orange-400" strokeWidth={2.25} />
       </div>
       <span className="text-2xl font-bold tracking-tight">
         <span className="text-slate-900">Resa</span>
-        <span className="text-red-600">Rea</span>
+        <span className="text-orange-600">Rea</span>
       </span>
     </div>
   );
@@ -277,7 +277,7 @@ function NextScanPill() {
   if (!label) return null;
   return (
     <div className="hidden md:flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 text-xs text-gray-500 shadow-sm">
-      <Clock size={12} className="text-red-600" />
+      <Clock size={12} className="text-orange-600" />
       Nästa sökning {label}
     </div>
   );
@@ -765,7 +765,7 @@ export default function Home() {
             disabled={isPipelineBusy}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
           >
-            <Radar size={15} className="text-red-400" />
+            <Radar size={15} className="text-orange-400" />
             {isPipelineBusy ? 'Söker...' : 'Hitta supererbjudanden'}
           </button>
         </div>
