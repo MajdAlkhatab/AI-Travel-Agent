@@ -242,8 +242,8 @@ function Logo() {
         <Radar size={17} className="text-green-400" strokeWidth={2.25} />
       </div>
       <span className="text-2xl font-bold tracking-tight">
-        <span className="text-slate-900">Trip</span>
-        <span className="text-green-600">Hunter</span>
+        <span className="text-slate-900">Resa</span>
+        <span className="text-green-600">Rea</span>
       </span>
     </div>
   );
