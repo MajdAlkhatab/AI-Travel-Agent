@@ -1,52 +1,25 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { NextResponse } from 'next/server';
-import { put, list } from '@vercel/blob';
+import { list } from '@vercel/blob';
 
-function getDealEconomics(deal: any) {
-  const flightCurrent = deal.flight?.price || 0;
-  const hotelTotalCurrent = deal.hotel?.total_rate?.extracted_lowest || 0;
-  const totalCurrent = flightCurrent + hotelTotalCurrent;
-
-  let hotelPct = 0;
-  if (deal.hotel?.deal) {
-    const match = deal.hotel.deal.match(/(\d+)\s*%/);
-    if (match) hotelPct = parseInt(match[1], 10);
-  }
-  const hotelTotalOriginal = (hotelTotalCurrent && hotelPct > 0) ? hotelTotalCurrent / (1 - hotelPct / 100) : hotelTotalCurrent;
-  const flightOriginal = deal.flight?.average_price || flightCurrent;
-  const totalOriginal = flightOriginal + hotelTotalOriginal;
-
-  const totalSavings = totalOriginal > totalCurrent ? totalOriginal - totalCurrent : 0;
-  const totalSavingsPercent = totalSavings > 0 ? Math.round((totalSavings / totalOriginal) * 100) : 0;
-
-  const rate = deal.exchange_rates?.SEK || 10.5;
-  return {
-    totalCurrent: Math.round(totalCurrent * rate),
-    totalSavings: Math.round(totalSavings * rate),
-    totalSavingsPercent
-  };
-}
+// Optional: Increases max timeout if you are on a paid Vercel plan
+export const maxDuration = 60; 
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+    const host = request.headers.get('host');
+    const baseUrl = `${protocol}://${host}`;
 
+    // 1. RANDOMIZE PARAMETERS (Just like the manual form, but automated)
     const airports = ['ARN', 'GOT', 'CPH'];
     const randomAirport = airports[Math.floor(Math.random() * airports.length)];
-    const randomTravelers = Math.random() > 0.5 ? '1' : '2'; 
+    const randomTravelers = Math.random() > 0.5 ? 1 : 2; 
     const randomDuration = Math.random() > 0.5 ? '2' : '1'; 
-    
-    // NEW: Randomize preference for the automated run
     const preferences = ['beach', 'city'];
     const randomPreference = preferences[Math.floor(Math.random() * preferences.length)];
 
-    const departureId = searchParams.get('departure_id') || randomAirport;
-    const travelers = searchParams.get('travelers') || randomTravelers;
-    const duration = searchParams.get('duration') || randomDuration;
-    const homeCurrency = searchParams.get('home_currency') || 'SEK';
-    const userPreference = searchParams.get('user_preference') || randomPreference; // NEW
-
-    // 1. Fetch existing deals FIRST
+    // 2. EXCLUSION CHECK (Same logic as frontend)
     let existingDeals: any[] = [];
     const { blobs } = await list({ prefix: 'deals.json' });
 
@@ -62,222 +35,94 @@ export async function GET(request: Request) {
         existingDeals
           .slice(0, 7)
           .map((d) => d?.country)
-          .filter((c): c is string => Boolean(c))
+          .filter(Boolean)
       )
-    );
+    ).join(',');
 
-    // 2. Call your Python AI Agents
-    const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
-    const host = request.headers.get('host');
-    const pythonApiUrl = `${protocol}://${host}/api/generate-trip?${new URLSearchParams({
-      departure_id: departureId,
-      travelers,
-      duration,
-      home_currency: homeCurrency,
-      user_preference: userPreference, // NEW: Passing it to the Python API
-      exclude_destinations: recentCountries.join(','),
+    // 3. TRIGGER AI AGENTS
+    const pythonApiUrl = `${baseUrl}/api/generate-trip?${new URLSearchParams({
+      departure_id: randomAirport,
+      travelers: String(randomTravelers),
+      duration: randomDuration,
+      home_currency: 'SEK',
+      user_preference: randomPreference,
+      exclude_destinations: recentCountries,
     }).toString()}`;
 
-    console.log("Triggering Python Agents at:", pythonApiUrl);
+    console.log("Cron triggering Python Agents at:", pythonApiUrl);
     const agentResponse = await fetch(pythonApiUrl, { cache: 'no-store' });
-
-    if (!agentResponse.ok) {
-      const errorText = await agentResponse.text();
-      throw new Error(`Python API failed: ${agentResponse.status} - ${errorText}`);
-    }
 
     if (!agentResponse.body) {
       throw new Error("No readable stream available from Python API");
     }
 
-    // Read the streaming response dynamically
+    // 4. EXACT SAME STREAM PARSING AS page.tsx
     const reader = agentResponse.body.getReader();
     const decoder = new TextDecoder();
     let partialData = '';
-    let newDeal = null;
-    let isEmpty = false;
+    let finalDeal = null;
+    let emptyRun = false;
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) {
-        // Check if there's any remaining data in the buffer when the stream closes
-        if (partialData.trim().startsWith('data: ')) {
-          try {
-            const payloadStr = partialData.replace('data: ', '').trim();
-            if (payloadStr) {
-              const payload = JSON.parse(payloadStr);
-              if (payload.type === 'complete') newDeal = payload.data;
-              else if (payload.type === 'empty') isEmpty = true;
-            }
-          } catch (e) {
-            // Ignore parse errors on the final chunk
-          }
-        }
-        break;
-      }
+      if (done) break;
 
       partialData += decoder.decode(value, { stream: true });
       const lines = partialData.split('\n\n');
-      partialData = lines.pop() || ''; // Keep the last incomplete chunk in the buffer
+      partialData = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.trim().startsWith('data: ')) {
+        if (line.startsWith('data: ')) {
           try {
-            const payloadStr = line.replace('data: ', '').trim();
-            if (!payloadStr) continue;
-            
-            const payload = JSON.parse(payloadStr);
+            const payload = JSON.parse(line.substring(6));
             
             if (payload.type === 'complete') {
-              newDeal = payload.data;
+              finalDeal = payload.data;
             } else if (payload.type === 'empty') {
-              isEmpty = true;
+              emptyRun = true;
             } else if (payload.type === 'error') {
               throw new Error(`Python Agent Error: ${payload.message}`);
             }
           } catch (e) {
-            // Ignore parse errors on incomplete chunks
+            // Ignore incomplete chunks
           }
         }
       }
     }
 
-    // Clean exit if Python backend signaled it found nothing
-    if (isEmpty || !newDeal) {
-      console.log("No flights found or stream finished without a complete deal.");
+    // Catch any remaining data in the buffer
+    if (partialData.trim().startsWith('data: ')) {
+      try {
+        const payload = JSON.parse(partialData.trim().substring(6));
+        if (payload.type === 'complete') finalDeal = payload.data;
+        else if (payload.type === 'empty') emptyRun = true;
+      } catch (e) {}
+    }
+
+    // 5. HANDLE NO DEALS GRACEFULLY
+    if (emptyRun || !finalDeal) {
+      console.log("Cron: No deals found this round. Exiting cleanly.");
       return NextResponse.json({
-        success: true, // Returning 200 so the cron job isn't marked as failed
+        success: true,
         message: "No flight deal found this run. Clean abort."
       });
     }
+
+    // 6. MIMIC MANUAL CLICK: POST TO /api/save-and-publish
+    console.log(`Cron: Deal found for ${finalDeal.destination}! Forwarding to save-and-publish endpoint...`);
     
-    // Fetch live exchange rates
-    try {
-      const fxRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=SEK,EUR,GBP');
-      if (fxRes.ok) {
-        const fxData = await fxRes.json();
-        newDeal.exchange_rates = {
-          USD: 1,
-          SEK: fxData.rates.SEK,
-          EUR: fxData.rates.EUR,
-          GBP: fxData.rates.GBP
-        };
-      }
-    } catch (e) {
-      console.warn("Failed to fetch exchange rates, using fallbacks.");
-      newDeal.exchange_rates = { USD: 1, SEK: 10.5, EUR: 0.93, GBP: 0.79 };
-    }
-
-    // 3. Bronze Save
-    const bronzeTimestamp = newDeal?.created_at || new Date().toISOString();
-    try {
-      await put(`bronze/${bronzeTimestamp}.json`, JSON.stringify({
-        created_at: bronzeTimestamp,
-        raw_flight_response: newDeal?.raw_flight_response ?? null,
-        raw_hotel_response: newDeal?.raw_hotel_response ?? null,
-      }), {
-        access: 'public',
-        addRandomSuffix: false,
-        contentType: 'application/json'
-      });
-    } catch (bronzeError) {
-      console.error("Bronze save failed:", bronzeError);
-    }
-
-    // 4. Guard
-    if (!newDeal || !newDeal.destination) {
-      console.warn("No valid deal found this run. Skipping save.");
-      return NextResponse.json({
-        success: false,
-        message: "No flight deal found this run. Nothing saved."
-      });
-    }
-
-    const { raw_flight_response, raw_hotel_response, ...curatedDeal } = newDeal;
-
-    // 5. Overwrite deals.json
-    existingDeals.unshift(curatedDeal);
-    if (existingDeals.length > 60) {
-      existingDeals = existingDeals.slice(0, 60);
-    }
-
-    await put('deals.json', JSON.stringify(existingDeals), {
-      access: 'public',
-      addRandomSuffix: false,
-      contentType: 'application/json'
+    const saveResponse = await fetch(`${baseUrl}/api/save-and-publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(finalDeal)
     });
 
-    // ------------------------------------------------------------------
-    // 6. TRIGGER SOCIAL MEDIA PUBLISHING (CAROUSEL)
-    // ------------------------------------------------------------------
-    try {
-      const destinationImages = curatedDeal.destination_images || [];
-      if (destinationImages.length === 0 && curatedDeal.flight?.thumbnail) {
-        destinationImages.push(curatedDeal.flight.thumbnail);
-      }
-      
-      const hotelImages = curatedDeal.hotel?.images?.map((img: any) => img.original_image || img.thumbnail) || [];
-      const topDestImages = destinationImages.slice(0, 5);
-      const topHotelImages = hotelImages.slice(0, 5);
-      
-      const imageUrls = [...topDestImages, ...topHotelImages]
-        .filter((url): url is string => Boolean(url))
-        .slice(0, 10);
-      
-      if (imageUrls.length > 0) {
-        
-        // ANVÄNDER DEN NYA SOCIALA MEDIER-AGENTENS TEXT
-        const socialCaption = curatedDeal.social_caption || `Sugen på en resa? 🌍✨\n\nVi har precis hittat ett supererbjudande till ${curatedDeal.destination}, ${curatedDeal.country}! Flyg & hotell säkrat.\n\nLänk i bion för att se hela resplanen och boka innan priserna ändras! ✈️👇`;
-        
-        const economics = getDealEconomics(curatedDeal);
-        
-        // Extract specific details for images 2 and 3
-        const s = new Date(curatedDeal.start_date).getTime();
-        const e = new Date(curatedDeal.end_date).getTime();
-        const nights = Math.round((e - s) / (1000 * 60 * 60 * 24)) || 2;
-        
-        let tempStr = '22°C'; 
-        if (curatedDeal.activity_summary) {
-          const m = curatedDeal.activity_summary.match(/(\d+\s*(?:°C|grader))/i);
-          if (m) tempStr = m[1].replace(/grader/i, '°C').replace(' ', '');
-        }
-
-        const tripDetails = {
-          travelers: curatedDeal.travelers || 2,
-          nights: nights,
-          depAirport: curatedDeal.flight?.departure_airport_code || 'ARN',
-          arrAirport: curatedDeal.flight?.arrival_airport_code || 'DEST',
-          temperature: tempStr
-        };
-        
-        const publishUrl = `${protocol}://${host}/api/publish`;
-        console.log("Triggering Carousel Social Media Publish at:", publishUrl);
-        
-        const publishRes = await fetch(publishUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
-          },
-          body: JSON.stringify({
-            imageUrls: imageUrls,
-            caption: socialCaption,
-            economics: economics,
-            tripDetails: tripDetails
-          })
-        });
-        
-        const publishData = await publishRes.json();
-        console.log("Publish Route Response:", publishData);
-      }
-    } catch (publishErr) {
-      console.error("Failed to trigger social media publish:", publishErr);
-    }
+    const saveResult = await saveResponse.json();
 
     return NextResponse.json({
       success: true,
-      message: "Deal saved to Blob and social media triggered successfully!",
-      deal: curatedDeal
+      message: "Cron successfully mimicked manual click!",
+      saveResult
     });
 
   } catch (error: any) {
