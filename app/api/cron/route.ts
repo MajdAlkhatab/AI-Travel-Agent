@@ -86,37 +86,68 @@ export async function GET(request: Request) {
       throw new Error(`Python API failed: ${agentResponse.status} - ${errorText}`);
     }
 
-    // Read the streaming response as plain text
-    const rawText = await agentResponse.text();
-    const lines = rawText.split('\n\n');
-    
-    let newDeal = null;
+    if (!agentResponse.body) {
+      throw new Error("No readable stream available from Python API");
+    }
 
-    // Loop through the stream chunks to find the "complete" payload
-    for (const line of lines) {
-      if (line.trim().startsWith('data: ')) {
-        try {
-          const payloadStr = line.replace('data: ', '').trim();
-          if (!payloadStr) continue;
-          
-          const payload = JSON.parse(payloadStr);
-          
-          if (payload.type === 'complete') {
-            newDeal = payload.data;
-          } else if (payload.type === 'error') {
-            throw new Error(`Python Agent Error: ${payload.message}`);
+    // Read the streaming response dynamically
+    const reader = agentResponse.body.getReader();
+    const decoder = new TextDecoder();
+    let partialData = '';
+    let newDeal = null;
+    let isEmpty = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        // Check if there's any remaining data in the buffer when the stream closes
+        if (partialData.trim().startsWith('data: ')) {
+          try {
+            const payloadStr = partialData.replace('data: ', '').trim();
+            if (payloadStr) {
+              const payload = JSON.parse(payloadStr);
+              if (payload.type === 'complete') newDeal = payload.data;
+              else if (payload.type === 'empty') isEmpty = true;
+            }
+          } catch (e) {
+            // Ignore parse errors on the final chunk
           }
-        } catch (e) {
-          // Ignore parse errors on incomplete chunks
+        }
+        break;
+      }
+
+      partialData += decoder.decode(value, { stream: true });
+      const lines = partialData.split('\n\n');
+      partialData = lines.pop() || ''; // Keep the last incomplete chunk in the buffer
+
+      for (const line of lines) {
+        if (line.trim().startsWith('data: ')) {
+          try {
+            const payloadStr = line.replace('data: ', '').trim();
+            if (!payloadStr) continue;
+            
+            const payload = JSON.parse(payloadStr);
+            
+            if (payload.type === 'complete') {
+              newDeal = payload.data;
+            } else if (payload.type === 'empty') {
+              isEmpty = true;
+            } else if (payload.type === 'error') {
+              throw new Error(`Python Agent Error: ${payload.message}`);
+            }
+          } catch (e) {
+            // Ignore parse errors on incomplete chunks
+          }
         }
       }
     }
 
-    if (!newDeal) {
-      console.warn("No complete deal payload found in the stream.");
+    // Clean exit if Python backend signaled it found nothing
+    if (isEmpty || !newDeal) {
+      console.log("No flights found or stream finished without a complete deal.");
       return NextResponse.json({
-        success: false,
-        message: "Stream finished but no valid deal was found."
+        success: true, // Returning 200 so the cron job isn't marked as failed
+        message: "No flight deal found this run. Clean abort."
       });
     }
     
