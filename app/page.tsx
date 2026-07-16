@@ -56,6 +56,7 @@ interface TravelDeal {
   end_date: string;
   flight: Flight;
   hotel: Hotel;
+  destination_images?: string[];
   transport_summary: string;
   activity_summary: string;
   currency_summary: string;
@@ -1022,20 +1023,43 @@ export default function Home() {
 
       {selectedDeal && (() => {
         const econ = getDealEconomics(selectedDeal);
+        
+        // Extract destination images and prioritize high-res hotel images for the gallery
+        const destImgs = selectedDeal.destination_images || [];
+        const fallbackDestImgs = destImgs.length === 0 && selectedDeal.flight?.thumbnail ? [selectedDeal.flight.thumbnail] : destImgs;
+        const hotelImgs = selectedDeal.hotel?.images?.map(img => img.original_image || img.thumbnail) || [];
+        const combinedGalleryImages = [...fallbackDestImgs, ...hotelImgs].filter(Boolean);
+
         return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setSelectedDeal(null)}>
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-gray-100" onClick={(e) => e.stopPropagation()}>
-            <div className="relative h-56 flex-shrink-0 rounded-t-2xl overflow-hidden">
-              {selectedDeal.flight?.thumbnail ? (
-                <img src={selectedDeal.flight.thumbnail} alt={selectedDeal.destination} className="w-full h-full object-cover" />
+            <div className="relative h-56 flex-shrink-0 rounded-t-2xl overflow-hidden bg-slate-900">
+              
+              {/* Swipeable Gallery */}
+              {combinedGalleryImages.length > 0 ? (
+                <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar">
+                  {combinedGalleryImages.map((url, i) => (
+                    <img 
+                      key={i} 
+                      src={url} 
+                      alt={`${selectedDeal.destination} bild ${i + 1}`} 
+                      className="w-full h-full object-cover flex-shrink-0 snap-center" 
+                    />
+                  ))}
+                </div>
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900" />
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              
+              {/* Overlays (Pointer-events-none ensures the user can drag/scroll the images underneath) */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
               <button onClick={() => setSelectedDeal(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-gray-600 font-semibold transition-colors z-10">✕</button>
-              <div className="absolute bottom-0 left-0 right-0 p-6">
+              <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-none">
                 <h2 className="text-white text-2xl font-semibold tracking-tight">{selectedDeal.destination}, {selectedDeal.country}</h2>
                 <p className="text-white/80 text-sm mt-1">{selectedDeal.flight?.highlights || 'Fullständig AI-genererad resplan'}</p>
+                {combinedGalleryImages.length > 1 && (
+                  <p className="text-white/60 text-xs mt-2 uppercase tracking-widest">Gallerivisning • Svep höger ➔</p>
+                )}
               </div>
             </div>
 
@@ -1093,14 +1117,6 @@ export default function Home() {
                     </div>
 
                     <p className="text-gray-500 mt-3">Reseperiod: {selectedDeal.start_date} till {selectedDeal.end_date} • 👥 {selectedDeal.travelers || 2} personer • ✈️ {selectedDeal.flight?.departure_airport_code || 'Avresa'} → {selectedDeal.flight?.arrival_airport_code || 'Dest'}</p>
-
-                    {selectedDeal.hotel?.images && selectedDeal.hotel.images.length > 0 && (
-                      <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-                        {selectedDeal.hotel.images.slice(0, 4).map((img, i) => (
-                          <img key={i} src={img.thumbnail} alt={`${selectedDeal.hotel?.name || 'Hotell'} bild ${i + 1}`} className="w-24 h-20 object-cover rounded-lg flex-shrink-0" />
-                        ))}
-                      </div>
-                    )}
 
                     {selectedDeal.hotel?.amenities && selectedDeal.hotel.amenities.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-3">
