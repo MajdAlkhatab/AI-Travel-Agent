@@ -303,23 +303,23 @@ function Beacon({ icon: Icon, label, status }: { icon: any; label: string; statu
     <div className="relative flex flex-col items-center justify-center flex-shrink-0 w-16">
       <div className="relative flex items-center justify-center w-16 h-16">
         {status === 'active' && (
-          <span className="absolute inset-0 rounded-full border-2 border-dashed border-green-400 th-radar-ring" />
+          <span className="absolute inset-0 rounded-full border-2 border-dashed border-orange-400 th-radar-ring" />
         )}
         {status === 'active' && (
-          <span className="absolute inset-2 rounded-full bg-green-500 animate-ping opacity-20" />
+          <span className="absolute inset-2 rounded-full bg-orange-500 animate-ping opacity-20" />
         )}
         <div
           className={
             'relative w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors duration-500 z-10 ' +
             (status === 'done'
-              ? 'bg-emerald-700 border-emerald-600'
+              ? 'bg-orange-700 border-orange-600'
               : status === 'active'
-              ? 'bg-green-500 border-green-400'
+              ? 'bg-orange-500 border-orange-400'
               : 'bg-slate-900 border-slate-700')
           }
         >
           {status === 'done' ? (
-            <CheckCircle2 size={18} className="text-emerald-300" strokeWidth={2.5} />
+            <CheckCircle2 size={18} className="text-orange-300" strokeWidth={2.5} />
           ) : (
             <Icon size={18} className={status === 'active' ? 'text-slate-950' : 'text-slate-600'} strokeWidth={2} />
           )}
@@ -328,7 +328,7 @@ function Beacon({ icon: Icon, label, status }: { icon: any; label: string; statu
       <span
         className={
           'absolute top-full mt-2 text-[11px] font-semibold tracking-wide whitespace-nowrap transition-colors duration-500 ' +
-          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-green-400' : 'text-emerald-500')
+          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-orange-400' : 'text-orange-500')
         }
       >
         {label}
@@ -342,7 +342,7 @@ function HConnector({ active }: { active: boolean }) {
     <div
       className={
         'flex-1 min-w-[24px] h-0.5 mx-1 rounded-full transition-colors duration-500 ' +
-        (active ? 'bg-emerald-600' : 'bg-slate-700')
+        (active ? 'bg-orange-600' : 'bg-slate-700')
       }
     />
   );
@@ -354,11 +354,11 @@ function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; stat
       <div
         className={
           'w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-500 ' +
-          (status === 'done' ? 'bg-emerald-700' : status === 'active' ? 'bg-green-500' : 'bg-slate-800')
+          (status === 'done' ? 'bg-orange-700' : status === 'active' ? 'bg-orange-500' : 'bg-slate-800')
         }
       >
         {status === 'done' ? (
-          <CheckCircle2 size={11} className="text-emerald-300" />
+          <CheckCircle2 size={11} className="text-orange-300" />
         ) : (
           <Icon size={11} className={status === 'active' ? 'text-slate-950' : 'text-slate-500'} />
         )}
@@ -366,12 +366,12 @@ function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; stat
       <span
         className={
           'text-[11px] font-medium whitespace-nowrap ' +
-          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-green-400' : 'text-emerald-500')
+          (status === 'pending' ? 'text-slate-600' : status === 'active' ? 'text-orange-400' : 'text-orange-500')
         }
       >
         {label}
       </span>
-      {status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />}
+      {status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse flex-shrink-0" />}
     </div>
   );
 }
@@ -379,7 +379,7 @@ function MiniRow({ icon: Icon, label, status }: { icon: any; label: string; stat
 function BranchingParallelBox({ transport, activities, currency, activeOverall }: { transport: NodeStatus; activities: NodeStatus; currency: NodeStatus; activeOverall: boolean }) {
   return (
     <div className="relative flex items-stretch flex-shrink-0 mx-1">
-      <div className={`w-3 border-t-2 border-b-2 border-l-2 rounded-l-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
+      <div className={`w-3 border-t-2 border-b-2 border-l-2 rounded-l-xl transition-colors duration-500 ${activeOverall ? 'border-orange-600' : 'border-slate-700'}`}></div>
       <div className="flex gap-5 px-4 py-2.5 bg-slate-900/40 rounded-md z-10 mx-1">
         <div className="flex flex-col gap-2">
           <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Transport</div>
@@ -398,7 +398,7 @@ function BranchingParallelBox({ transport, activities, currency, activeOverall }
           <MiniRow icon={Coins} label="Växelkurs" status={currency} />
         </div>
       </div>
-      <div className={`w-3 border-t-2 border-b-2 border-r-2 rounded-r-xl transition-colors duration-500 ${activeOverall ? 'border-emerald-600' : 'border-slate-700'}`}></div>
+      <div className={`w-3 border-t-2 border-b-2 border-r-2 rounded-r-xl transition-colors duration-500 ${activeOverall ? 'border-orange-600' : 'border-slate-700'}`}></div>
     </div>
   );
 }
@@ -455,7 +455,7 @@ function PipelineStrip({
       <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Radar size={15} className={isSettled ? 'text-slate-500' : 'text-green-400'} />
+            <Radar size={15} className={isSettled ? 'text-slate-500' : 'text-orange-400'} />
             <span className="text-slate-100 font-semibold text-sm">
               {phase === 'done' ? 'Hittade ett erbjudande'
                 : phase === 'empty' ? 'Inga erbjudanden denna runda'
@@ -494,9 +494,9 @@ function PipelineStrip({
 
         {!isSettled && (
           <div className="bg-black/40 border border-slate-800 rounded-lg px-4 py-2 mt-2">
-            <p className="text-green-400 text-xs font-mono">
+            <p className="text-orange-400 text-xs font-mono">
               {consoleLine}
-              <span className="inline-block w-1.5 h-3 bg-green-400 ml-1 align-middle th-blink" />
+              <span className="inline-block w-1.5 h-3 bg-orange-400 ml-1 align-middle th-blink" />
             </p>
           </div>
         )}
@@ -516,7 +516,7 @@ function PipelineStrip({
             </div>
             <button
               onClick={onClose}
-              className="flex-shrink-0 bg-green-500 hover:bg-green-400 text-slate-950 font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+              className="flex-shrink-0 bg-orange-500 hover:bg-orange-400 text-slate-950 font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
             >
               Visa resa
             </button>
@@ -1015,7 +1015,7 @@ export default function Home() {
               disabled={isPipelineBusy}
               className="w-full mt-6 flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
             >
-              <Radar size={15} className="text-green-400" />
+              <Radar size={15} className="text-orange-400" />
               Hitta supererbjudanden
             </button>
           </div>
