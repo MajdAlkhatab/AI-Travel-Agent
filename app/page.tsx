@@ -632,6 +632,12 @@ export default function Home() {
       }).toString()}`;
       
       const response = await fetch(`/api/generate-trip${query}`);
+      if (response.status === 429) {
+        const errorData = await response.json();
+        setPipelineError(errorData.error);
+        setPipelinePhase('error');
+        return;
+      }
       
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
