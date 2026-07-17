@@ -4,6 +4,7 @@ import json
 import re
 import time
 import random
+import urllib.request
 from datetime import date, timedelta, datetime, timezone
 from typing import TypedDict, Annotated, List, Union
 
@@ -29,10 +30,7 @@ serp_client = serpapi.Client(api_key=SERP_API_KEY)
 tavily = TavilyClient()
 llm = ChatOpenAI(model="gpt-5-nano") 
 
-# Departure airports to try, in order, if the requested one has no usable
-# deals this run. Stockholm Arlanda first (larger hub, more deal volume),
-# then Göteborg Landvetter. Swap the order below to prefer GOT first.
-DEPARTURE_FALLBACKS = ["ARN", "GOT"]  # Stockholm Arlanda, Göteborg Landvetter
+DEPARTURE_FALLBACKS = ["ARN", "GOT"] 
 
 # --- 2. AI PYDANTIC MODELS ---
 class DestinationArea(BaseModel):
@@ -54,7 +52,7 @@ class TravelPlanState(TypedDict):
     duration: str
     home_currency: str
     exclude_destinations: List[str]
-    user_preference: str  # NEW: beach or city
+    user_preference: str 
 
     flight: dict
     hotel: dict
@@ -77,7 +75,6 @@ class TravelPlanState(TypedDict):
 
 # --- 4. CORE LOGIC ---
 def get_upcoming_weekends(weeks=4):
-    """Calculates exact (Friday, Sunday) dates for upcoming weekends."""
     weekends = []
     today = date.today()
     days_ahead = 4 - today.weekday()
@@ -110,30 +107,16 @@ def get_flight_deals(departure_id, outbound_date, return_date=None, travel_durat
     if travel_duration:
         params["travel_duration"] = travel_duration
 
-    print(f"[flight-search] request departure_id={departure_id} outbound={outbound_date}")
-
     start = time.monotonic()
     raw_result = serp_client.search(params)
     result = raw_result.as_dict()
-    elapsed_ms = round((time.monotonic() - start) * 1000, 1)
-
-    metadata = result.get("search_metadata", {}) or {}
-    print(
-        f"[flight-search] response departure_id={departure_id} "
-        f"status={metadata.get('status')} search_id={metadata.get('id')} "
-        f"elapsed_ms={elapsed_ms}"
-    )
-
+    
     error = result.get("error")
     if error:
-        deals_url = metadata.get("google_flights_deals_url")
-        print(f"[flight-search] ERROR departure_id={departure_id} error={error!r} check_url={deals_url}")
         if "empty results" in str(error).lower():
             return result
         raise RuntimeError(f"google_flights_deals failed: {error}")
 
-    deals = result.get("deals", [])
-    print(f"[flight-search] departure_id={departure_id} returned {len(deals)} raw deals")
     return result
 
 def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, currency="USD", gl="us", hl="en", special_offers="true"):
@@ -148,35 +131,20 @@ def get_hotel_deals(destination, check_in_date, check_out_date, adults=2, curren
         "special_offers": special_offers,
     }
 
-    print(f"[hotel-search] request q='{destination} hotels' check_in={check_in_date} check_out={check_out_date} adults={adults} special_offers={special_offers}")
-
-    start = time.monotonic()
     raw_result = serp_client.search(params)
     result = raw_result.as_dict()
-    elapsed_ms = round((time.monotonic() - start) * 1000, 1)
-
-    metadata = result.get("search_metadata", {}) or {}
-    print(
-        f"[hotel-search] response destination='{destination}' "
-        f"status={metadata.get('status')} search_id={metadata.get('id')} "
-        f"elapsed_ms={elapsed_ms}"
-    )
-
+    
     error = result.get("error")
     if error:
-        print(f"[hotel-search] ERROR destination='{destination}' error={error!r}")
         if "empty results" in str(error).lower():
             return result
         raise RuntimeError(f"google_hotels failed: {error}")
 
-    properties = result.get("properties", [])
-    print(f"[hotel-search] destination='{destination}' returned {len(properties)} properties")
     return result
 
 async def get_best_hotel_area(city, country):
     prompt = f"What is the single most popular tourist destination/area for hotels in or near {city}, {country}? Reply with just the destination name."
     result = await structured_llm.ainvoke(prompt)
-    print(f"[hotel-area] {city}, {country} -> {result.destination}")
     return result.destination
 
 def get_destination_images(query: str, max_images: int = 5) -> List[str]:
@@ -186,7 +154,6 @@ def get_destination_images(query: str, max_images: int = 5) -> List[str]:
         "gl": "us",
         "hl": "en",
     }
-    print(f"[image-search] requesting images for '{query}'")
     try:
         raw_result = serp_client.search(params)
         result = raw_result.as_dict()
@@ -199,8 +166,6 @@ def get_destination_images(query: str, max_images: int = 5) -> List[str]:
                 urls.append(original)
             if len(urls) >= max_images:
                 break
-                
-        print(f"[image-search] found {len(urls)} images")
         return urls
     except Exception as e:
         print(f"[image-search] ERROR fetching images: {e}")
@@ -212,18 +177,16 @@ def hotel_discount_percent(hotel):
 
 @tool
 def web_search(query: str) -> str:
-    """Search the web for current data (transport, weather, activities)."""
     return str(tavily.search(query))
 
 taxi_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a taxi expert. Search for the exact taxi fare price and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
 bus_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a public transport expert. Search for the bus/train ticket price and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
 app_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a ride-hailing expert. Search for Uber/Bolt fare prices and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
-
 transport_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Compare the Taxi, Bus, and App choices. Output a clean, simple bulleted list in Swedish with NO introductory text. Format exactly like this:\n- **Taxi**: [Pris] ([Tidsåtgång])\n- **Buss**: [Pris] ([Tidsåtgång])\n- **Uber/Bolt**: [Pris] ([Tidsåtgång])\n\n**Slutgiltigt val**: [Din korta rekommendation på svenska].")
+
 weather_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a weather expert. Get forecast. Return short answer strictly in Swedish.")
 activities_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are an activities expert. Get free/cheap things to do. Return short answer strictly in Swedish.")
 culture_executor = create_agent(model="gpt-5-nano", tools=[], system_prompt="You are a cultural expert. Research the destination and provide exactly 6 things strictly in Swedish: one 'Gör' (Do), one 'Gör inte' (Don't), one local slang word (with meaning), one strict dining/tipping rule, a one-sentence 'vibe check' of the city's pace, and a list of the top 3 must-try local foods.")
-
 activity_main_agent = create_agent(model="gpt-5-nano", tools=[], system_prompt="Summarize the destination in Swedish. Use exactly three Markdown headers: '### 🌤️ Väder', '### 🎯 Toppaktiviteter', and '### 🏛️ Kultur & Vett och etikett'. Under each header, provide Weather (3 short, punchy bullet points) Activities (6 short, punchy bullet points) Culture & Etiquette (Exactly 6 bullet points: Gör, Gör inte, Slang, Restaurang/Dricks, Vibe, and Topp 3 maträtter. CRITICAL: Each must be strictly one short sentence). CRITICAL: DO NOT include budget breakdowns, total trip estimates, or flight/hotel costs.")
 
 tavily_currency_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="Search web for exchange rate. Return short answer without mentioning any dates. Reply strictly in Swedish.")
@@ -244,21 +207,14 @@ async def node_trip_deals(state: TravelPlanState):
     departure_id = state["departure_id"]
     exclude = {c.strip().lower() for c in state.get("exclude_destinations", []) if c and c.strip()}
 
-    print(f"[trip-deals] starting run: pref={user_preference} exclude={exclude}")
-
-    # 1. Smart Date Selection
     if duration_type == "2":
-        # 🎲 RANDOMLY select just ONE weekend from the next 4 to save API credits and force exact dates
         weekends = get_upcoming_weekends(4)
         target_outbound, target_return = random.choice(weekends)
         duration_param = None
-        print(f"[trip-deals] Selected Exact Weekend: {target_outbound} to {target_return}")
     else:
-        # Flexible range for exactly 1 week (ignoring 2-week logic)
         target_outbound = flexible_date_range(60)
         target_return = None
-        duration_param = "1"  # Force 1 week travel duration
-        print(f"[trip-deals] Selected Flexible Dates: {target_outbound} (Duration: {duration_param})")
+        duration_param = "1"
 
     departure_ids_to_try = [departure_id] + [d for d in DEPARTURE_FALLBACKS if d != departure_id]
     
@@ -266,17 +222,14 @@ async def node_trip_deals(state: TravelPlanState):
     raw_flight_response = None
     raw_flights = []
 
-    # 2. Flight Hunt
     for dep_id in departure_ids_to_try:
         raw_flight_response = get_flight_deals(dep_id, target_outbound, target_return, duration_param)
         deals = raw_flight_response.get("deals", [])
         if deals:
             raw_flights = deals
             break
-        print(f"[trip-deals] no eligible flight from {dep_id}, trying next fallback airport...")
 
     if not raw_flights:
-        print(f"[trip-deals] FINAL: no deals found across {departure_ids_to_try}")
         return {"destination": None, "raw_flight_response": raw_flight_response}
 
     eligible_flights = [
@@ -285,18 +238,11 @@ async def node_trip_deals(state: TravelPlanState):
         and f.get("country", "").strip().lower() not in exclude
     ]
 
-    # --- RELAX CONSTRAINT 1: If exclude list killed all flights, ignore exclude list
     if not eligible_flights:
-        print(f"[trip-deals] All flights excluded. Relaxing exclude constraint...")
-        eligible_flights = [
-            f for f in raw_flights 
-            if f.get("outbound_date") and f.get("return_date")
-        ]
+        eligible_flights = [f for f in raw_flights if f.get("outbound_date") and f.get("return_date")]
         if not eligible_flights:
-            print(f"[trip-deals] FINAL: no eligible deals even after relaxing exclusions")
             return {"destination": None, "raw_flight_response": raw_flight_response}
 
-    # 3. AI-Powered Filtering & Ranking
     raw_city_list = [f.get("name") for f in eligible_flights if f.get("name")]
     prompt_modifier = (
         "the most popular beach and summer destinations" if user_preference == "beach" 
@@ -317,29 +263,21 @@ async def node_trip_deals(state: TravelPlanState):
     res_cities = await filter_llm.ainvoke(prompt)
     ranked_cities = res_cities.cities
 
-    # --- RELAX CONSTRAINT 2: If AI found no matching cities, ask for generic top destinations
     if not ranked_cities:
-        print(f"[trip-deals] AI found no matches for {user_preference}. Relaxing vibe constraint...")
         fallback_prompt = f"""
-        Here is a raw list of destination cities pulled from our flight data (duplicates included): 
-        {raw_city_list}
-
         Which of these cities are the best general tourist destinations? 
-        Return ONLY the cities from this list that match the criteria. 
         Order the final list strictly from MOST popular to LEAST popular. 
         Ensure there are NO DUPLICATES in your final returned list.
+        {raw_city_list}
         """
         res_cities_fallback = await filter_llm.ainvoke(fallback_prompt)
         ranked_cities = res_cities_fallback.cities
         
-        # --- RELAX CONSTRAINT 3 (NUCLEAR): If AI STILL fails, just take the raw list
         if not ranked_cities:
-            print(f"[trip-deals] AI fallback failed. Using raw city list.")
             ranked_cities = list(set(raw_city_list))
             if not ranked_cities:
                 return {"destination": None, "raw_flight_response": raw_flight_response}
 
-    # 4. Locking in the Destination
     target_city_lower = ranked_cities[0].lower()
     flights_to_winner = [f for f in eligible_flights if f.get("name", "").lower() == target_city_lower]
     flights_to_winner = sorted(flights_to_winner, key=lambda d: d.get("discount_percentage", 0), reverse=True)
@@ -354,13 +292,11 @@ async def node_trip_deals(state: TravelPlanState):
     dest_query = f"{city} {country} tourism landmarks high quality"
     destination_images = get_destination_images(dest_query, max_images=5)
 
-    # 5. The Ultimate Hotel Judge
     hotel_area = await get_best_hotel_area(city, country)
     raw_hotel_response = get_hotel_deals(f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"])
     hotels = raw_hotel_response.get("properties", [])
     
     if not hotels:
-        print(f"[trip-deals] No special offers found for {city}. Trying without filter...")
         raw_hotel_response = get_hotel_deals(
             f"{hotel_area}, {country}", check_in, check_out, adults=state["travelers"], special_offers="false"
         )
@@ -390,7 +326,6 @@ async def node_trip_deals(state: TravelPlanState):
         hotel_llm = llm.with_structured_output(HotelWinner)
         winning_hotel_eval = await hotel_llm.ainvoke(judge_prompt)
         
-        # Match AI winner back to the hotel dict
         chosen_name_lower = winning_hotel_eval.hotel_name.lower()
         for h in hotels:
             if h.get('name', '').lower() == chosen_name_lower:
@@ -400,11 +335,8 @@ async def node_trip_deals(state: TravelPlanState):
         if not best_hotel:
             best_hotel = hotels[0]
             
-        # Store verdict to display on the frontend if needed
         best_hotel['deal_description'] = winning_hotel_eval.verdict 
 
-    print(f"[trip-deals] FINAL: {city}, {country} | hotel={'yes' if best_hotel else 'none found'}")
-    
     return {
         "flight": best_flight,
         "hotel": best_hotel,
@@ -528,15 +460,53 @@ async def generate_trip(
     duration: str = "2", 
     home_currency: str = "SEK", 
     exclude_destinations: str = "",
-    user_preference: str = "beach", # NEW PARAMETER
+    user_preference: str = "beach",
 ):
+    blob_token = os.getenv("BLOB_READ_WRITE_TOKEN")
+    if blob_token:
+        today_str = date.today().isoformat()
+        counter = {"date": today_str, "count": 0}
+        
+        try:
+            req_list = urllib.request.Request("https://blob.vercel-storage.com/?prefix=global-counter.json")
+            req_list.add_header("Authorization", f"Bearer {blob_token}")
+            with urllib.request.urlopen(req_list) as response:
+                blobs = json.loads(response.read()).get("blobs", [])
+                
+            if blobs:
+                req_file = urllib.request.Request(blobs[0]["url"])
+                with urllib.request.urlopen(req_file) as file_res:
+                    saved_data = json.loads(file_res.read())
+                    if saved_data.get("date") == today_str:
+                        counter = saved_data
+
+            if counter["count"] >= 10:
+                return JSONResponse(
+                    status_code=429, 
+                    content={"error": "Dagens pott på 10 AI-sökningar är redan slut. Välkommen tillbaka imorgon!"}
+                )
+
+            counter["count"] += 1
+            put_data = json.dumps(counter).encode("utf-8")
+            req_put = urllib.request.Request("https://blob.vercel-storage.com/global-counter.json", data=put_data, method="PUT")
+            req_put.add_header("Authorization", f"Bearer {blob_token}")
+            req_put.add_header("x-api-version", "7")
+            req_put.add_header("x-add-random-suffix", "false")
+            req_put.add_header("Content-Type", "application/json")
+            
+            with urllib.request.urlopen(req_put) as put_res:
+                pass
+                
+        except Exception as e:
+            print(f"[rate-limit] Error interacting with Blob: {e}")
+
     inputs = {
         "departure_id": departure_id,
         "travelers": travelers,
         "duration": duration, 
         "home_currency": home_currency,
         "exclude_destinations": [c for c in exclude_destinations.split(",") if c.strip()],
-        "user_preference": user_preference, # PASS TO GRAPH
+        "user_preference": user_preference,
     }
     
     async def event_stream():
