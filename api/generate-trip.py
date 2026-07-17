@@ -174,6 +174,7 @@ def hotel_discount_percent(hotel):
 
 @tool
 def web_search(query: str) -> str:
+    """Search the web for current data (transport, weather, activities)."""
     return str(tavily.search(query))
 
 taxi_executor = create_agent(model="gpt-5-nano", tools=[web_search], system_prompt="You are a taxi expert. Search for the exact taxi fare price and duration from the airport to the hotel. Return ONLY the price and duration without fluff. Reply strictly in Swedish.")
