@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     
     const airports = ['ARN', 'GOT', 'CPH'];
     const travelersOptions = [1, 2];
-    const durations = ['1', '2']; // 1 = Vecka, 2 = Helg
+    const durations = ['2', '2']; // 1 = Vecka, 2 = Helg ;; now Helg only
     const preferences = ['beach', 'city'];
 
     const pick = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
