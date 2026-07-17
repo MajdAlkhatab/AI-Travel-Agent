@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 
 // CRITICAL: AI takes time. Allow this function to run for up to 5 minutes.
-// (Note: Vercel Hobby plan limits this to 10-60 seconds. You may need a Pro plan for LLM tasks).
 export const maxDuration = 300; 
 
 export async function GET(request: Request) {
@@ -15,7 +14,7 @@ export async function GET(request: Request) {
     const requestUrl = `${baseUrl}/api/generate-trip?departure_id=ARN&travelers=2&duration=2&home_currency=SEK&user_preference=beach`;
     console.log(`[CRON] Calling backend endpoint: ${requestUrl}`);
 
-    // 1. Trigger your AI Agents (using default parameters)
+    // 1. Trigger your AI Agents
     const startTime = Date.now();
     const fetchOptions = {
       headers: {
@@ -23,95 +22,83 @@ export async function GET(request: Request) {
       }
     };
     
-    // Fix 1: Passed fetchOptions into the request
     const aiResponse = await fetch(requestUrl, fetchOptions);
     const timeToFirstByte = Date.now() - startTime;
     
-    console.log(`[CRON] Response received. Status: ${aiResponse.status}, Time to First Byte: ${timeToFirstByte}ms`);
-    console.log(`[CRON] Response Headers:`, Object.fromEntries(aiResponse.headers.entries()));
+    console.log(`[CRON] Response Status: ${aiResponse.status}, Time to First Byte: ${timeToFirstByte}ms`);
 
     if (!aiResponse.body) {
-       console.log("[CRON] ERROR: No readable stream in response body");
        throw new Error("No readable stream");
     }
 
-    // 2. Read the stream until we get the final deal
-    console.log("[CRON] Body exists. Initializing reader...");
+    // 2. Read the stream using a Buffer ("Waiting Room")
     const reader = aiResponse.body.getReader();
     const decoder = new TextDecoder();
     let finalDeal = null;
-    let chunksProcessed = 0;
+    let buffer = ""; // <-- THIS IS THE WAITING ROOM
 
-    console.log("[CRON] Starting while loop to read stream...");
+    console.log("[CRON] Starting stream processing...");
+    
     while (true) {
-      console.log(`[CRON] Reading chunk ${chunksProcessed}...`);
       const { done, value } = await reader.read();
       
-      if (done) {
-         console.log(`[CRON] Stream is done. Total chunks processed: ${chunksProcessed}`);
-         break;
-      }
+      if (done) break;
       
-      chunksProcessed++;
-      const chunk = decoder.decode(value, { stream: true });
-      console.log(`[CRON] Chunk ${chunksProcessed} decoded. Length: ${chunk.length} chars. Preview: ${chunk.substring(0, 50).replace(/\n/g, '\\n')}...`);
+      // Add the new chunk of text to whatever is already in the waiting room
+      buffer += decoder.decode(value, { stream: true });
       
-      const lines = chunk.split('\n\n');
-      console.log(`[CRON] Chunk ${chunksProcessed} contains ${lines.length} lines.`);
+      // Split the buffer by double line-breaks (the signal that a message is finished)
+      const parts = buffer.split('\n\n');
       
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const payloadString = line.substring(6);
-            console.log(`[CRON] Parsing payload: ${payloadString.substring(0, 50)}...`);
-            const payload = JSON.parse(payloadString);
-            
-            console.log(`[CRON] Payload type received: ${payload.type}`);
-            
-            if (payload.type === 'complete') {
-              console.log("[CRON] COMPLETE payload received. Capturing deal data.");
-              finalDeal = payload.data;
-            } else if (payload.type === 'error' || payload.type === 'empty') {
-              console.log(`[CRON] Terminating payload received (${payload.type}). Message: ${payload.message || "No deals found today."}`);
-              return NextResponse.json({ status: payload.type, message: payload.message || "No deals found today." });
+      // The last part might be cut off halfway through. 
+      // We pop it off the array and leave it in the buffer for the next loop.
+      buffer = parts.pop() || "";
+      
+      // Now we only process the completely finished parts
+      for (const part of parts) {
+        // SSE messages might have multiple lines, we only care about the ones starting with 'data: '
+        const lines = part.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const payloadString = line.substring(6);
+              const payload = JSON.parse(payloadString);
+              
+              if (payload.type === 'complete') {
+                console.log("[CRON] COMPLETE payload captured successfully!");
+                finalDeal = payload.data;
+              } else if (payload.type === 'error' || payload.type === 'empty') {
+                console.log(`[CRON] Terminating gracefully. Type: ${payload.type}`);
+                return NextResponse.json({ status: payload.type, message: payload.message || "No deals found today." });
+              }
+            } catch (e) {
+               console.error(`[CRON] Failed to parse completed JSON string. Error:`, e);
             }
-          } catch (e) {
-             console.log(`[CRON] Failed to parse line starting with 'data: ' : ${line.substring(0, 50)}... Error:`, e);
           }
-        } else if (line.trim() !== '') {
-           console.log(`[CRON] Ignored line (does not start with 'data: '): ${line.substring(0, 50).replace(/\n/g, '\\n')}`);
         }
       }
     }
 
-    console.log("[CRON] Stream processing finished.");
-
     if (!finalDeal) {
-       console.log("[CRON] ERROR: Stream finished without generating a deal.");
        throw new Error("Stream finished without generating a deal.");
     }
-    
-    console.log(`[CRON] Deal captured successfully. Destination: ${finalDeal.destination}`);
 
     // 3. Save to Blob and Push to Meta
     const publishUrl = `${baseUrl}/api/save-and-publish`;
-    console.log(`[CRON] Initiating publish sequence to: ${publishUrl}`);
+    console.log(`[CRON] Initiating publish sequence...`);
     
     const publishRes = await fetch(publishUrl, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        // Fix 2: Added the bypass header here as well
         'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET || ''
       },
       body: JSON.stringify(finalDeal)
     });
     
-    console.log(`[CRON] Publish response status: ${publishRes.status}`);
     const publishResult = await publishRes.json();
-    console.log(`[CRON] Publish result:`, publishResult);
+    console.log(`[CRON] Publish sequence finished. Success:`, publishResult.success);
 
-    console.log("[CRON] Cron Job completed successfully.");
     return NextResponse.json({ 
       success: true, 
       destination: finalDeal.destination, 
@@ -119,7 +106,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error: any) {
-    console.error("[CRON] Cron execution failed:", error);
+    console.error("[CRON] Execution failed:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
