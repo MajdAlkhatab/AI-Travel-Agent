@@ -1,28 +1,25 @@
-import os
-import asyncio
-import json
-import re
-import time
-import random
-import urllib.request
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from fastapi.responses import StreamingResponse, JSONResponse
 from datetime import date, timedelta, datetime, timezone
 from typing import TypedDict, Annotated, List, Union
-
-import serpapi
-from dotenv import load_dotenv
-from tavily import TavilyClient
-from pydantic import BaseModel, Field
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
-
-from langchain_openai import ChatOpenAI
-from langchain.agents import create_agent
-from langchain.tools import tool
-from langchain.messages import HumanMessage
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import StateGraph, START, END
+from fastapi import FastAPI, HTTPException
+from langchain.messages import HumanMessage
+from langchain.agents import create_agent
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from langchain.tools import tool
+from tavily import TavilyClient
+from dotenv import load_dotenv
+import serpapi
+import asyncio
+import random
+import json
+import time
+import os
+import re
 
-# --- 1. SETUP & INITIALIZATION ---
+#  1. SETUP & INITIALIZATION 
 load_dotenv()
 
 SERP_API_KEY = os.getenv("SERP_API_KEY")
@@ -32,7 +29,7 @@ llm = ChatOpenAI(model="gpt-5-nano")
 
 DEPARTURE_FALLBACKS = ["ARN", "GOT"] 
 
-# --- 2. AI PYDANTIC MODELS ---
+#  2. AI PYDANTIC MODELS 
 class DestinationArea(BaseModel):
     destination: str
 
@@ -45,7 +42,7 @@ class HotelWinner(BaseModel):
 
 structured_llm = llm.with_structured_output(DestinationArea)
 
-# --- 3. GRAPH STATE SCHEMA ---
+#  3. GRAPH STATE SCHEMA 
 class TravelPlanState(TypedDict):
     departure_id: str
     travelers: int
@@ -73,7 +70,7 @@ class TravelPlanState(TypedDict):
     final_itinerary: str
     social_caption: str 
 
-# --- 4. CORE LOGIC ---
+#  4. CORE LOGIC 
 def get_upcoming_weekends(weeks=4):
     weekends = []
     today = date.today()
@@ -200,7 +197,7 @@ async def get_frankfurter_executor():
         _frankfurter_executor = create_agent(model="gpt-5-nano", tools=tools, system_prompt="Use get_rates to find exchange rate. Return short answer without mentioning any dates. Reply strictly in Swedish.")
     return _frankfurter_executor
 
-# --- 5. LANGGRAPH NODES ---
+#  5. LANGGRAPH NODES 
 async def node_trip_deals(state: TravelPlanState):
     user_preference = state.get("user_preference", "beach")
     duration_type = state["duration"]
@@ -429,7 +426,7 @@ async def node_synthesize(state: TravelPlanState):
         "social_caption": res_social.content
     }
 
-# --- 6. GRAPH WIRING ---
+#  6. GRAPH WIRING 
 def route_after_deals(state: TravelPlanState) -> Union[List[str], str]:
     if not state.get("destination"): return END 
     return ["transport", "activities", "currency"]
@@ -449,7 +446,7 @@ builder.add_edge("currency", "synthesize")
 builder.add_edge("synthesize", END)
 graph = builder.compile()
 
-# --- 7. FASTAPI APPLICATION SETUP ---
+#  7. FASTAPI APPLICATION SETUP 
 app = FastAPI()
 
 @app.get("/")
