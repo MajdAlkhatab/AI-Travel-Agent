@@ -484,7 +484,7 @@ async def node_synthesize(state: TravelPlanState):
     6. Skriv inte ut rubrikerna (t.ex. "1. Inledning" eller "2. Kort om vädret"), utan skriv endast innehållet.
     7. Skriv inte "–"
     8. Avsluta ALLTID inlägget med något linknande till denna mening och radbrytning: 
-       "Länk i bion för att se exakta priser, hela resplanen och boka innan priset ändras! ✈️👇"
+       "ResaRea.se för bokning! ✈️ 💡 Hittar du inget? Klicka på ”Hitta supererbjudanden” på sajten så väcker du vår AI! 👇"
     """
 
     res_itin, res_social = await asyncio.gather(
