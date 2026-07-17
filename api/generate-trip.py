@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from langchain.tools import tool
 from tavily import TavilyClient
 from dotenv import load_dotenv
+import urllib.request
 import serpapi
 import asyncio
 import random
