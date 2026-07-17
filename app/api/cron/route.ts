@@ -17,6 +17,11 @@ export async function GET(request: Request) {
 
     // 1. Trigger your AI Agents (using default parameters)
     const startTime = Date.now();
+    const fetchOptions = {
+      headers: {
+        'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '',
+      }
+    };
     const aiResponse = await fetch(requestUrl);
     const timeToFirstByte = Date.now() - startTime;
     
