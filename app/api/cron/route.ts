@@ -9,7 +9,19 @@ export async function GET(request: Request) {
     const host = request.headers.get('host');
     const baseUrl = `${protocol}://${host}`;
     
-    const requestUrl = `${baseUrl}/api/generate-trip?departure_id=ARN&travelers=2&duration=2&home_currency=SEK&user_preference=beach`;
+    const airports = ['ARN', 'GOT', 'CPH'];
+    const travelersOptions = [1, 2];
+    const durations = ['1', '2']; // 1 = Vecka, 2 = Helg
+    const preferences = ['beach', 'city'];
+
+    const pick = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
+
+    const dep = pick(airports);
+    const pax = pick(travelersOptions);
+    const dur = pick(durations);
+    const pref = pick(preferences);
+
+    const requestUrl = `${baseUrl}/api/generate-trip?departure_id=${dep}&travelers=${pax}&duration=${dur}&home_currency=SEK&user_preference=${pref}`;
     console.log(`[CRON] Calling backend endpoint: ${requestUrl}`);
 
     // 1. Trigger your AI Agents
