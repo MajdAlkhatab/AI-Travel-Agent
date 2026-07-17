@@ -254,7 +254,7 @@ function useNextScan() {
   const [label, setLabel] = useState('');
   useEffect(() => {
     const compute = () => {
-      const hours = [9, 12, 15, 18];
+      const hours = [6, 9, 12, 18, 22]; 
       const now = new Date();
       const next = hours.find((h) => h > now.getHours());
       const target = new Date(now);
