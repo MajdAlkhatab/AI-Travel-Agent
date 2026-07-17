@@ -22,7 +22,9 @@ export async function GET(request: Request) {
         'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '',
       }
     };
-    const aiResponse = await fetch(requestUrl);
+    
+    // Fix 1: Passed fetchOptions into the request
+    const aiResponse = await fetch(requestUrl, fetchOptions);
     const timeToFirstByte = Date.now() - startTime;
     
     console.log(`[CRON] Response received. Status: ${aiResponse.status}, Time to First Byte: ${timeToFirstByte}ms`);
@@ -97,7 +99,11 @@ export async function GET(request: Request) {
     
     const publishRes = await fetch(publishUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        // Fix 2: Added the bypass header here as well
+        'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET || ''
+      },
       body: JSON.stringify(finalDeal)
     });
     
