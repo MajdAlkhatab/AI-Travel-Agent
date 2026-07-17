@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-
-// CRITICAL: AI takes time. Allow this function to run for up to 5 minutes.
 export const maxDuration = 300; 
 
 export async function GET(request: Request) {
@@ -35,8 +33,7 @@ export async function GET(request: Request) {
     const reader = aiResponse.body.getReader();
     const decoder = new TextDecoder();
     let finalDeal = null;
-    let buffer = ""; // <-- THIS IS THE WAITING ROOM
-
+    let buffer = ""; 
     console.log("[CRON] Starting stream processing...");
     
     while (true) {
@@ -44,19 +41,13 @@ export async function GET(request: Request) {
       
       if (done) break;
       
-      // Add the new chunk of text to whatever is already in the waiting room
       buffer += decoder.decode(value, { stream: true });
       
-      // Split the buffer by double line-breaks (the signal that a message is finished)
       const parts = buffer.split('\n\n');
       
-      // The last part might be cut off halfway through. 
-      // We pop it off the array and leave it in the buffer for the next loop.
       buffer = parts.pop() || "";
       
-      // Now we only process the completely finished parts
       for (const part of parts) {
-        // SSE messages might have multiple lines, we only care about the ones starting with 'data: '
         const lines = part.split('\n');
         for (const line of lines) {
           if (line.startsWith('data: ')) {
