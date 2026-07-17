@@ -304,7 +304,7 @@ async def node_trip_deals(state: TravelPlanState):
     best_hotel = None
     if hotels:
         formatted_hotels = []
-        for h in hotels[:10]:
+        for h in hotels:
             formatted_hotels.append(
                 f"- Name: {h.get('name')}\n"
                 f"  Price: {h.get('rate_per_night', {}).get('lowest', 'N/A')}/night\n"
