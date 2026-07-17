@@ -104,14 +104,15 @@ export async function POST(request: Request) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.API_SECRET_KEY}`
+          'Authorization': `Bearer ${process.env.API_SECRET_KEY}`,
+          'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET || ''
         },
         body: JSON.stringify({
           imageUrls: imageUrls,
           caption: socialCaption,
           economics: economics,
           tripDetails: tripDetails,
-          locationText: `${curatedDeal.destination}, ${curatedDeal.country}` // <--- NYTT: Skickar orten explicit till ritmotorn!
+          locationText: `${curatedDeal.destination}, ${curatedDeal.country}`
         })
       });
     }
