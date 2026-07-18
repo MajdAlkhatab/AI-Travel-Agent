@@ -415,7 +415,9 @@ async def node_synthesize(state: TravelPlanState):
     6. Skriv inte ut rubrikerna (t.ex. "1. Inledning" eller "2. Kort om vädret"), utan skriv endast innehållet.
     7. Skriv inte "–"
     8. Avsluta ALLTID inlägget med något linknande till denna mening och radbrytning: 
-       "ResaRea.se för bokning! ✈️ 💡 Hittar du inget? Klicka på ”Hitta supererbjudanden” på sajten så väcker du vår AI! 👇"
+       "ResaRea.se för bokning! ✈️ 💡 Hittar du inget? Klicka på ”Hitta supererbjudanden” på sajten så väcker du vår AI! 👇
+       "
+
     """
 
     res_itin, res_social = await asyncio.gather(
@@ -425,7 +427,7 @@ async def node_synthesize(state: TravelPlanState):
     
     return {
         "final_itinerary": res_itin.content,
-        "social_caption": res_social.content
+        "social_caption": res_social.content + "\n\nResaRea.se\n#Resa #BilligaResor #Semester #Exclusiveresor #allinclusive #allinclusiveresa #Weekendresa #Storstad #SistaMinuten #Erbjudande"
     }
 
 #  6. GRAPH WIRING 
