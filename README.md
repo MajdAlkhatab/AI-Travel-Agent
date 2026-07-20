@@ -1,3 +1,5 @@
+# ResaRea.se
+
 I built an automated digital travel agency. It works by having several AI agents collaborate to create trips with flights and hotels, write an itinerary, and publish content to social media and a website, multiple times a day. It is a small example of how we can now automate an entire service.
 
 You can instruct AI in different ways to build a trip. You might tell it to pick the lowest prices. But if you do, you may end up with a bad trip to an isolated destination. If you pick the highest price, you get an overpriced trip. The goal is balance. We want to extract value. These agents are instructed to find high quality at low prices. You control the shape of the trip just by changing the prompt in the backend code.
